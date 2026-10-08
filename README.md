@@ -23,7 +23,7 @@ Internal, single-user tool for selling the **Trial-to-Member System** ($500) and
    | Name | Value |
    |---|---|
    | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | `client_email` from the JSON |
-   | `GOOGLE_PRIVATE_KEY` | `private_key` from the JSON, pasted exactly as it is (the `\n` sequences are fine — the code converts them; surrounding quotes are also stripped) |
+   | `GOOGLE_PRIVATE_KEY` | `private_key` from the JSON, pasted as it is. The code tolerates literal `\n`, real newlines, spaces instead of newlines, wrapping quotes, a trailing comma, or the whole JSON file. If the key is still unusable, the error says what is wrong (empty / cut off / body too short). |
    | `GOOGLE_SHEET_ID` | the Sheet ID from step 1 |
 
 3. **Deploy** (or Redeploy after adding the variables).

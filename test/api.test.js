@@ -33,11 +33,45 @@ function fresh(opts) {
   return fake;
 }
 
-test('private key: literal \\n sequences and wrapping quotes are normalised', () => {
-  const k = sheets.normalizePrivateKey('"-----BEGIN PRIVATE KEY-----\\nABC\\n-----END PRIVATE KEY-----\\n"');
-  assert.equal(k, '-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----\n');
-  const real = '-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----\n';
-  assert.equal(sheets.normalizePrivateKey(real), real.trim());
+const crypto = require('node:crypto');
+const goodPem = crypto.generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } }).privateKey;
+
+test('private key: every common way of mangling it in Vercel still yields a usable key', () => {
+  const body = goodPem.replace(/-----[A-Z ]+-----/g, '').replace(/\s/g, '');
+  const variants = {
+    'real newlines': goodPem,
+    'literal \\n (what Vercel/.env stores)': goodPem.replace(/\n/g, '\\n'),
+    'wrapping double quotes': `"${goodPem.replace(/\n/g, '\\n')}"`,
+    'quotes + trailing comma (copied from the JSON line)': `"${goodPem.replace(/\n/g, '\\n')}",`,
+    'double-escaped \\\\n': goodPem.replace(/\n/g, '\\\\n'),
+    'spaces instead of newlines': goodPem.replace(/\n/g, ' '),
+    'CRLF line endings': goodPem.replace(/\n/g, '\r\n'),
+    'whole JSON key file pasted': JSON.stringify({ type: 'service_account', private_key: goodPem }),
+    'surrounding whitespace': `\n  ${goodPem}  \n`,
+  };
+  Object.entries(variants).forEach(([name, raw]) => {
+    const pem = sheets.preparePrivateKey(raw);
+    assert.equal(pem, goodPem, name);
+    crypto.createPrivateKey(pem); // really parses
+  });
+  assert.ok(body.length > 1000);
+});
+
+test('private key: broken values fail with a specific, secret-free diagnosis', () => {
+  const lit = goodPem.replace(/\n/g, '\\n');
+  const cases = [
+    ['', /is empty/],
+    ['MIIEvgIBADAN-not-a-key', /does not start with -----BEGIN PRIVATE KEY-----/],
+    [lit.slice(0, 700), /cut off/],
+    [lit.slice(0, 400) + lit.slice(900), /key body has \d+ characters/],
+  ];
+  cases.forEach(([raw, re]) => {
+    assert.throws(() => sheets.preparePrivateKey(raw), (e) => {
+      assert.match(e.message, re);
+      assert.doesNotMatch(e.message, /MIIE[A-Za-z0-9+/]{40}/); // never echoes key material
+      return e instanceof sheets.ConfigError;
+    });
+  });
 });
 
 test('first run: empty Leads tab gets the 20-column header; Activity tab is created with its header', async () => {

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { google } = require('googleapis');
 const {
   LEADS_TAB, ACTIVITY_TAB, HEADERS, ACTIVITY_HEADERS, ENUMS, NUMERIC, colLetter, LAST_COL,
@@ -12,14 +13,44 @@ const REQUIRED_ENV = ['GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'GOO
 let sheetsClient = null;
 let setupPromise = null;
 
-// Vercel/.env files store the key with literal "\n" sequences (and sometimes wrapping quotes).
-// Accept both that and a key pasted with real newlines.
+// The private key is the thing people most often paste slightly wrong into Vercel, so be forgiving:
+// real newlines, literal "\n", double-escaped "\\n", spaces instead of newlines, wrapping quotes,
+// a trailing comma, or even the whole JSON key file. We pull out the base64 body between the
+// BEGIN/END markers and rebuild a canonical PEM from it.
 function normalizePrivateKey(raw) {
   let key = String(raw || '').trim();
-  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
-    key = key.slice(1, -1);
+  if (key.startsWith('{')) {
+    try { key = JSON.parse(key).private_key || key; } catch { /* fall through */ }
   }
-  return key.replace(/\\n/g, '\n');
+  const m = /-----BEGIN ([A-Z ]*PRIVATE KEY)-----([\s\S]*?)-----END \1-----/.exec(key);
+  if (!m) return key.replace(/\\n/g, '\n'); // no markers found: validation below reports it
+  const body = m[2]
+    .replace(/\\+[nr]/g, '')        // literal \n / \\n / \r sequences
+    .replace(/[^A-Za-z0-9+/=]/g, ''); // whitespace, quotes, commas, stray characters
+  return `-----BEGIN ${m[1]}-----\n${body.match(/.{1,64}/g).join('\n')}\n-----END ${m[1]}-----\n`;
+}
+
+// Normalise + prove the key parses, with a diagnosis that never reveals key material.
+function preparePrivateKey(raw) {
+  const pem = normalizePrivateKey(raw);
+  try {
+    crypto.createPrivateKey(pem);
+    return pem;
+  } catch (err) {
+    const text = String(raw || '');
+    const hasBegin = /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(text);
+    const hasEnd = /-----END [A-Z ]*PRIVATE KEY-----/.test(text);
+    let why;
+    if (!text.trim()) why = 'it is empty';
+    else if (!hasBegin) why = 'it does not start with -----BEGIN PRIVATE KEY----- (you may have pasted the wrong field, e.g. private_key_id)';
+    else if (!hasEnd) why = 'it is cut off — the -----END PRIVATE KEY----- line is missing (the value was truncated when pasting)';
+    else {
+      const body = (/-----BEGIN [A-Z ]*PRIVATE KEY-----([\s\S]*?)-----END/.exec(pem) || [])[1] || '';
+      const chars = body.replace(/\s/g, '').length;
+      why = `the key body has ${chars} characters but a valid Google key has about 1600 — part of it is missing or was altered while pasting`;
+    }
+    throw new ConfigError(`GOOGLE_PRIVATE_KEY is not a valid key: ${why}. Re-copy the whole "private_key" value from the JSON file. (${err.message})`);
+  }
 }
 
 function checkEnv() {
@@ -34,7 +65,7 @@ function getSheets() {
   checkEnv();
   const auth = new google.auth.JWT({
     email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: normalizePrivateKey(process.env.GOOGLE_PRIVATE_KEY),
+    key: preparePrivateKey(process.env.GOOGLE_PRIVATE_KEY),
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   sheetsClient = google.sheets({ version: 'v4', auth });
@@ -275,5 +306,5 @@ async function runTest() {
 
 module.exports = {
   ConfigError, ValidationError, ConflictError,
-  normalizePrivateKey, ensureSetup, listAll, appendLead, updateLead, runTest, explain, __setSheetsForTests,
+  normalizePrivateKey, preparePrivateKey, ensureSetup, listAll, appendLead, updateLead, runTest, explain, __setSheetsForTests,
 };
