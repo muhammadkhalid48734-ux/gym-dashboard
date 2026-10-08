@@ -189,7 +189,7 @@
     const lead = findLead(row);
     const counts = L.dmsByAccountToday(state.activity, today());
     const total = L.dmsSentToday(state.activity, today());
-    let acct = account || L.nextAccount(counts);
+    let acct = account || (L.ACCOUNTS.includes(lead['DM Account']) ? lead['DM Account'] : null) || L.nextAccount(counts);
     const full = !acct || counts[acct] >= L.ACCOUNT_CAP;
     if ((full || total >= L.DAILY_DM_CAP) && !confirm(`${acct && counts[acct] >= L.ACCOUNT_CAP ? acct : 'Both accounts'} already sent ${L.ACCOUNT_CAP} DMs today (daily cap ${L.DAILY_DM_CAP}). Send another anyway?`)) return;
     if (!acct) acct = L.ACCOUNTS.reduce((best, a) => (counts[a] < counts[best] ? a : best), L.ACCOUNTS[0]);
@@ -336,9 +336,16 @@
   }
 
   // ---------------------------------------------------------------- rendering: entry cards (Today / Warming / Follow-ups / Replies)
-  function dueEntry(lead, tag, body, buttons) {
+  // Coloured "Account 1" / "Account 2" flag at the very top of a card + a matching stripe down its left edge.
+  const acctNo = (acct) => (acct === 'Account 1' ? 1 : acct === 'Account 2' ? 2 : 0);
+  const acctClass = (acct) => (acctNo(acct) ? `acct-${acctNo(acct)}` : '');
+  const acctFlag = (acct) => (acctNo(acct) ? `<div class="acct-flag-row"><span class="acct-flag a${acctNo(acct)}"><i></i>${esc(acct)}</span></div>` : '');
+
+  function dueEntry(lead, tag, body, buttons, acct) {
+    const a = acct || lead['DM Account'];
     return `
-      <div class="card entry fade-in">
+      <div class="card entry fade-in ${acctClass(a)}">
+        ${acctFlag(a)}
         <div class="entry-head">
           ${avatar(lead)}
           <div class="min-w-0 flex-1">
@@ -357,16 +364,14 @@
     '<div class="muted text-sm mt-3" style="line-height:1.45">Leave a <b style="color:var(--text)">real comment</b> on a recent post — something specific, not an emoji — then log it.</div>',
     btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok'));
 
-  const acctChip = (lead) => (lead['DM Account'] ? chip(`Send from ${lead['DM Account']}`, 'violet') : '');
-
   function followupEntry(it) {
     const lead = it.lead;
     if (it.type === 'lost') {
-      return dueEntry(lead, chip(`Day ${it.daysSinceDm} · no reply`, 'red') + acctChip(lead),
+      return dueEntry(lead, chip(`Day ${it.daysSinceDm} · no reply`, 'red'),
         it.text ? `<div class="msg-label">Day 10 message not sent yet</div><div class="msg">${esc(it.text)}</div>` : '<div class="muted text-sm mt-3">All follow-ups sent, still no reply.</div>',
         `${it.text ? copyBtn(it.text) : ''}${btn('Mark Lost', 'markLost', { row: lead._row }, 'btn-danger')}`);
     }
-    return dueEntry(lead, chip(`Day ${it.day} follow-up`, 'blue') + acctChip(lead),
+    return dueEntry(lead, chip(`Day ${it.day} follow-up`, 'blue'),
       `<div class="msg">${esc(it.text)}</div>`,
       `${copyBtn(it.text)}${btn('Mark Sent', 'markFollowUp', { row: lead._row }, 'btn-ok', 'send')}`);
   }
@@ -435,7 +440,8 @@
       const dm = L.dm1(lead);
       const pips = [0, 1, 2].map((i) => `<i class="${i < touches ? (touches >= 3 ? 'full' : 'on') : ''}"></i>`).join('');
       return `
-        <div class="card entry fade-in ${ready && !sent ? 'ready-ring' : ''}">
+        <div class="card entry fade-in ${ready && !sent ? 'ready-ring' : ''} ${acctClass(lead['DM Account'])}">
+          ${acctFlag(lead['DM Account'])}
           <div class="entry-head">
             ${avatar(lead)}
             <div class="min-w-0 flex-1">
@@ -450,7 +456,7 @@
           <div class="entry-actions">
             ${sent
               ? `${copyBtn(dm)}${btn('Done', 'dismissSent', { row: lead._row })}`
-              : `${showDm ? copyBtn(dm) : ''}${btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok')}${btn(`Send DM 1${nextAcct ? ` · ${nextAcct}` : ''}`, 'sendDm1', { row: lead._row }, ready ? 'btn-primary' : '', 'send')}${showDm ? btn('Hide', 'togglePreview', { row: lead._row }, 'btn-sm') : btn('Preview DM 1', 'togglePreview', { row: lead._row }, '', 'note')}`}
+              : `${showDm ? copyBtn(dm) : ''}${btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok')}${btn(`Send DM 1${(lead['DM Account'] || nextAcct) ? ` · ${lead['DM Account'] || nextAcct}` : ''}`, 'sendDm1', { row: lead._row }, ready ? 'btn-primary' : '', 'send')}${showDm ? btn('Hide', 'togglePreview', { row: lead._row }, 'btn-sm') : btn('Preview DM 1', 'togglePreview', { row: lead._row }, '', 'note')}`}
           </div>
         </div>`;
     });
@@ -499,12 +505,13 @@
     const open = state.expanded.has(lead._row);
     const pkg = lead.Package || '';
     return `
-      <div class="card lead-row fade-in">
+      <div class="card lead-row fade-in ${acctClass(lead['DM Account'])}">
+        ${acctFlag(lead['DM Account'])}
         <div class="lead-top" data-action="toggleRow" data-row="${lead._row}">
           ${avatar(lead)}
           <div class="flex-1 min-w-0">
             <div class="entry-name">${esc(lead['Gym Name'])}${lead.City ? ` <span class="muted" style="font-weight:500;font-size:.75rem">· ${esc(lead.City)}</span>` : ''}</div>
-            <div class="entry-tags" style="margin-top:.4rem">${statusChip(lead.Status)}${chip(lead.Priority && `${lead.Priority} priority`, PRIORITY_TONE[lead.Priority])}${chip(pkg, PKG_TONE[pkg])}${chip(lead['DM Account'], 'violet')}${extra}</div>
+            <div class="entry-tags" style="margin-top:.4rem">${statusChip(lead.Status)}${chip(lead.Priority && `${lead.Priority} priority`, PRIORITY_TONE[lead.Priority])}${chip(pkg, PKG_TONE[pkg])}${extra}</div>
           </div>
           <div class="last-contact shrink-0">Last contact<b>${esc(ago(lead['Last Contact Date']))}</b></div>
           <span class="chev ${open ? 'open' : ''}">${icon('chev')}</span>
@@ -651,7 +658,7 @@
       const tag = x.ready ? '<span class="chip chip-solid-ok">Ready for DM 1</span>'
         : chip(`Not ready: ${plural(x.touches, 'touch', 'touches')}${x.days === null ? '' : ` · day ${x.days}`}`, 'amber');
       return dueEntry(lead, tag, `<div class="msg">${esc(dm)}</div>`,
-        `${copyBtn(dm)}${btn(`Mark sent · ${acct}`, 'sendDm1', { row: lead._row, account: acct }, 'btn-ok', 'send')}`);
+        `${copyBtn(dm)}${btn(`Mark sent · ${acct}`, 'sendDm1', { row: lead._row, account: acct }, 'btn-ok', 'send')}`, acct);
     };
     const panel = (a) => {
       const n = q.counts[a];
@@ -793,6 +800,7 @@
             <div id="package-hint" class="hint"></div>
           </div>
         </div>
+        ${fld('Account (auto: continues the 10 / 10 pattern)', selectHtml('DM Account', E['DM Account'], { value: L.nextNewLeadAccount(state.leads), placeholder: '—' }), 'col-span-2')}
         ${fld('Notes', '<textarea class="field" name="Notes" rows="2" placeholder="e.g. uses Mindbody → Low priority"></textarea>', 'col-span-2')}
         <div class="col-span-2 muted text-xs">On save: Status = Warming · Engagement Started = today · Touches = 0</div>
         <div class="col-span-2">

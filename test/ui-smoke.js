@@ -44,6 +44,7 @@ const { start } = require('./devServer.js');
   tv = await view.innerText();
   assert.match(tv, /Hey Sam, just floating this back up/); assert.doesNotMatch(tv, /Warm Ready/); step('Today › Follow-ups: Day 3 follow-up due (other groups hidden)');
   assert.match(tv, /Mark Lost/); step('Today › Follow-ups: 11+ day lead shows Mark Lost');
+  assert.match(await view.locator('.card', { hasText: 'Day3 Gym' }).locator('.acct-flag').innerText(), /Account 1/); step('Today › Follow-ups: card shows which account to send from');
   await page.locator('[data-action=copy]').first().click();
   await page.waitForSelector('#toasts :text("Copied")'); step('copy toast');
   await view.locator('.card', { hasText: 'Day3 Gym' }).locator('button:text("Mark Sent")').click();
@@ -67,6 +68,8 @@ const { start } = require('./devServer.js');
   assert.equal(await view.locator('.card', { hasText: 'Warm Fresh' }).locator('a.pill-link.fb').count(), 0); step('Warming: Instagram + Facebook buttons side by side (Facebook only when a link exists)');
   const fresh = view.locator('.card', { hasText: 'Warm Fresh' });
   assert.ok((await view.locator('.card .entry-name').allInnerTexts())[0] === 'Warm Ready'); step('Warming: ready leads listed first');
+  assert.match(await ready.locator('.acct-flag').innerText(), /Account 1/); assert.match(await view.locator('.card', { hasText: 'Warm Fresh' }).locator('.acct-flag').innerText(), /Account 2/);
+  assert.match(await ready.getAttribute('class'), /acct-1/); step('Warming: every card shows its account on top (Account 1 / Account 2)');
   await ready.locator('button:text("Preview DM 1")').click();
   assert.match(await ready.innerText(), /Hey Sam! Saw Warm Ready's page/); assert.equal(rowOf('Warm Ready')[14], 'Warming'); step('Warming: Preview DM 1 shows the text without changing status');
   await fresh.locator('button:text("+1 Touch")').click();
@@ -175,6 +178,7 @@ const { start } = require('./devServer.js');
   assert.equal(await page.inputValue('[name=Priority]'), 'High');
   assert.equal(await page.inputValue('[name=Package]'), 'Follow-up Add-on');
   assert.match(await page.innerText('#package-hint'), /Follow-up Add-on — \$250-300 \(confirmation \+ reminder \+ follow-up only\)/); step('add form: suggests High + Follow-up Add-on label');
+  assert.equal(await page.inputValue('[name="DM Account"]'), 'Account 1'); step('add form: Account prefilled (continues the 10 / 10 pattern)');
   await page.fill('[name="Notes"]', 'they use Mindbody');
   assert.equal(await page.inputValue('[name=Priority]'), 'Low'); assert.equal(await page.inputValue('[name=Package]'), 'Skip'); step('notes mention Mindbody → Low + Skip');
   await page.selectOption('[name=Package]', 'Follow-up Add-on');
@@ -183,7 +187,7 @@ const { start } = require('./devServer.js');
   await page.click('#add-submit');
   await page.waitForSelector('#toasts :text("added to Sheet")');
   const nr = rowOf('Brand New Fitness');
-  assert.equal(nr[2], 'https://instagram.com/brandnew'); assert.equal(nr[20], 'https://facebook.com/brandnewfitness'); assert.equal(nr[3], 12500); assert.equal(nr[14], 'Warming'); assert.equal(nr[17], today); assert.equal(nr[18], 0); assert.equal(nr[19], 'Follow-up Add-on'); step('lead appended: Warming, started today, touches 0, Package saved');
+  assert.equal(nr[2], 'https://instagram.com/brandnew'); assert.equal(nr[20], 'https://facebook.com/brandnewfitness'); assert.equal(nr[21], 'Account 1'); assert.equal(nr[3], 12500); assert.equal(nr[14], 'Warming'); assert.equal(nr[17], today); assert.equal(nr[18], 0); assert.equal(nr[19], 'Follow-up Add-on'); step('lead appended: Warming, started today, touches 0, Package saved');
 
   // ---- misc
   await page.click('.topbar [data-action=openLoom]');
@@ -244,6 +248,23 @@ const { start } = require('./devServer.js');
     assert.match(hc, /Account 1\s+10\/10/);
     await qp.click('[data-tab=followups]');
     assert.match(await qp.innerText('#view'), /Account 1/); step('Follow-ups show which account sent DM 1');
+    await qp.close(); q.server.close();
+  }
+
+  // ---- DM Queue with accounts already assigned in the Sheet (blocks of 10): each list holds that account's own leads
+  {
+    const q = await start(0, { seedQueue: 30, assign: true });
+    const qp = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+    await qp.goto(`http://localhost:${q.port}/#queue`);
+    await qp.waitForSelector('[data-tab=queue].on');
+    const panels = qp.locator('.qpanel');
+    const nm = async (i) => (await panels.nth(i).locator('.entry-name').allInnerTexts());
+    const a1 = await nm(0); const a2 = await nm(1);
+    assert.equal(a1[0], 'Queue 01'); assert.equal(a1[9], 'Queue 10'); assert.equal(a2[0], 'Queue 11'); assert.equal(a2[9], 'Queue 20');
+    assert.match(await qp.innerText('#view'), /10 more waiting for tomorrow/); step('DM Queue (assigned): Queue 01-10 → Account 1, 11-20 → Account 2, 21-30 wait for tomorrow');
+    assert.equal(await panels.nth(0).locator('.acct-flag.a1').count(), 10); assert.equal(await panels.nth(1).locator('.acct-flag.a2').count(), 10); step('DM Queue: every card carries its account flag');
+    await qp.click('[data-tab=all]');
+    assert.equal(await qp.locator('.lead-list > .card.acct-1').count(), 20); assert.equal(await qp.locator('.lead-list > .card.acct-2').count(), 10); step('All leads: rows show their account too');
     await qp.close(); q.server.close();
   }
 

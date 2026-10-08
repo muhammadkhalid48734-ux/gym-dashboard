@@ -26,11 +26,11 @@ function seed(fake) {
     'Has Follow-up Automation': 'No', 'Current Offer': 'Free Trial', Priority: 'High', 'Instagram Link': 'https://instagram.com/x' };
   base['Facebook Link'] = '';
   const add = (o) => fake.__grids.get('Leads').push(row({ ...base, ...o }));
-  add({ 'Gym Name': 'Warm Ready', 'Facebook Link': 'https://facebook.com/warmready', Status: 'Warming', 'Engagement Started': daysAgo(3), 'Engagement Touches': 3, 'Last Contact Date': daysAgo(1), Package: 'Trial-to-Member System' });
-  add({ 'Gym Name': 'Warm Fresh', City: 'Dallas', Status: 'Warming', 'Engagement Started': daysAgo(0), 'Engagement Touches': 1, 'Last Contact Date': L.todayISO(), Package: 'Trial-to-Member System' });
-  add({ 'Gym Name': 'Day3 Gym', Status: 'DM Sent', 'Last Contact Date': daysAgo(3), 'Website Quality': 'Modern', Package: 'Follow-up Add-on' });
-  add({ 'Gym Name': 'Price Quiet', City: 'Dallas', Status: 'Price Sent', 'Last Contact Date': daysAgo(4), Package: 'Follow-up Add-on', 'Website Quality': 'Modern' });
-  add({ 'Gym Name': 'Old Silent', Status: 'DM Sent', 'Last Contact Date': daysAgo(12), Priority: 'Low' });
+  add({ 'Gym Name': 'Warm Ready', 'DM Account': 'Account 1', 'Facebook Link': 'https://facebook.com/warmready', Status: 'Warming', 'Engagement Started': daysAgo(3), 'Engagement Touches': 3, 'Last Contact Date': daysAgo(1), Package: 'Trial-to-Member System' });
+  add({ 'Gym Name': 'Warm Fresh', 'DM Account': 'Account 2', City: 'Dallas', Status: 'Warming', 'Engagement Started': daysAgo(0), 'Engagement Touches': 1, 'Last Contact Date': L.todayISO(), Package: 'Trial-to-Member System' });
+  add({ 'Gym Name': 'Day3 Gym', 'DM Account': 'Account 1', Status: 'DM Sent', 'Last Contact Date': daysAgo(3), 'Website Quality': 'Modern', Package: 'Follow-up Add-on' });
+  add({ 'Gym Name': 'Price Quiet', 'DM Account': 'Account 2', City: 'Dallas', Status: 'Price Sent', 'Last Contact Date': daysAgo(4), Package: 'Follow-up Add-on', 'Website Quality': 'Modern' });
+  add({ 'Gym Name': 'Old Silent', 'DM Account': 'Account 1', Status: 'DM Sent', 'Last Contact Date': daysAgo(12), Priority: 'Low' });
   const act = fake.__grids.get('Activity');
   act[0] = ['Timestamp', 'Date', 'Gym', 'City', 'Event', 'Detail'];
   act.push([new Date().toISOString(), daysAgo(3), 'Day3 Gym', 'Austin', 'DM Sent', 'DM 1']);
@@ -38,12 +38,13 @@ function seed(fake) {
 }
 
 // n leads that are all ready for DM 1 (3 touches, started 5 days ago) — for the DM Queue split test.
-function seedQueue(fake, n) {
+function seedQueue(fake, n, assign) {
   fake.__grids.get('Leads')[0] = HEADERS;
   fake.__grids.get('Activity')[0] = ['Timestamp', 'Date', 'Gym', 'City', 'Event', 'Detail'];
   for (let i = 1; i <= n; i++) {
     const o = { 'Gym Name': `Queue ${String(i).padStart(2, '0')}`, City: 'Austin', 'Owner Name': 'Sam', 'Current Offer': 'Free Trial', Status: 'Warming',
       'Engagement Started': daysAgo(5), 'Engagement Touches': 3, 'Instagram Link': 'https://instagram.com/q', 'Facebook Link': 'https://facebook.com/q' };
+    if (assign) o['DM Account'] = L.blockAccount(i - 1);
     fake.__grids.get('Leads').push(HEADERS.map((h) => (o[h] === undefined ? '' : o[h])));
   }
 }
@@ -51,7 +52,7 @@ function seedQueue(fake, n) {
 function start(port = Number(process.env.PORT) || 3000, opts = {}) {
   const fake = createFakeSheets({ tabs: ['Leads', 'Activity'], failWrites: !!opts.failWrites });
   if (process.env.SEED === '1' || opts.seed) seed(fake);
-  if (opts.seedQueue) seedQueue(fake, opts.seedQueue);
+  if (opts.seedQueue) seedQueue(fake, opts.seedQueue, opts.assign);
   sheets.__setSheetsForTests(fake);
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');

@@ -235,3 +235,39 @@ test('per-account counts: today only, distinct leads, legacy sends without an ac
   assert.equal(L.nextAccount({ 'Account 1': 9, 'Account 2': 0 }), 'Account 1');
   assert.equal(L.nextAccount({ 'Account 1': 10, 'Account 2': 3 }), 'Account 2');
 });
+
+// ---------- accounts are assigned per lead (Sheet column "DM Account"), in blocks of 10 ----------
+test('blocks of 10: rows 1-10 → Account 1, 11-20 → Account 2, then it repeats', () => {
+  const at = (...i) => i.map((n) => L.blockAccount(n));
+  assert.deepEqual(at(0, 9, 10, 19, 20, 29, 30, 49), ['Account 1', 'Account 1', 'Account 2', 'Account 2', 'Account 1', 'Account 1', 'Account 2', 'Account 1']);
+});
+
+test('a new lead continues the current block of 10, then switches account', () => {
+  const mk = (n) => Array.from({ length: n }, (_, i) => ({ _row: i + 2, 'DM Account': L.blockAccount(i) }));
+  assert.equal(L.nextNewLeadAccount([]), 'Account 1');
+  assert.equal(L.nextNewLeadAccount(mk(5)), 'Account 1');
+  assert.equal(L.nextNewLeadAccount(mk(10)), 'Account 2'); // block of 10 is full
+  assert.equal(L.nextNewLeadAccount(mk(13)), 'Account 2');
+  assert.equal(L.nextNewLeadAccount(mk(20)), 'Account 1');
+  assert.equal(L.nextNewLeadAccount([{ _row: 2, 'DM Account': '' }, ...mk(3).map((l) => ({ ...l, _row: l._row + 5 }))]), 'Account 1'); // blanks are ignored
+});
+
+test('DM queue honours each lead\'s own account; extra leads of a full account wait for tomorrow', () => {
+  const leads = warmLeads(30).map((l, i) => ({ ...l, 'DM Account': L.blockAccount(i) })); // G0-9 A1, G10-19 A2, G20-29 A1
+  const q = L.buildDmQueue(leads, [], T, false);
+  assert.deepEqual(names(q, 'Account 1'), ['G0', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9']);
+  assert.deepEqual(names(q, 'Account 2'), ['G10', 'G11', 'G12', 'G13', 'G14', 'G15', 'G16', 'G17', 'G18', 'G19']);
+  assert.equal(q.leftover, 10); // G20-29 are Account 1's too — they wait
+  // Account 1 already sent 4 today → only 6 slots left for its leads
+  const sent = Array.from({ length: 4 }, (_, i) => sentEv(`S${i}`, 'Account 1'));
+  const q2 = L.buildDmQueue(leads, sent, T, false);
+  assert.equal(q2.lists['Account 1'].length, 6); assert.equal(q2.lists['Account 2'].length, 10);
+});
+
+test('DM queue: leads without an account fill the room left after assigned leads', () => {
+  const leads = [...warmLeads(3).map((l) => ({ ...l, 'DM Account': 'Account 2' })), ...warmLeads(4).map((l) => ({ ...l, _row: l._row + 50, 'Gym Name': `U${l._row}` }))];
+  const q = L.buildDmQueue(leads, [], T, false);
+  assert.equal(q.lists['Account 2'].length, 3 + 0); // assigned first…
+  assert.equal(q.lists['Account 1'].length, 4);     // …unassigned go to Account 1 first
+  assert.ok(q.lists['Account 1'].every((x) => !x.lead['DM Account']));
+});

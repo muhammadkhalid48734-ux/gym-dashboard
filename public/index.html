@@ -29,6 +29,7 @@
       --mix: #000;
       --glass: rgba(244,245,250,.94);
       --topbar-h: 3.6rem;
+      --a1: #0284c7; --a2: #c026d3;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -166,6 +167,15 @@
     .subtab.on .ic { color: #fff; }
     .subtab.on .count { background: rgba(255,255,255,.26); color: #fff; }
 
+
+
+    /* ---------- account flag on cards ---------- */
+    .acct-flag-row { padding: 0 0 .6rem; }
+    .lead-row .acct-flag-row { padding: .7rem .9rem 0; }
+    .acct-flag { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; font-weight: 800; letter-spacing: .01em; color: #fff; padding: .28rem .7rem .28rem .55rem; border-radius: 9999px; line-height: 1; }
+    .acct-flag i { width: .45rem; height: .45rem; border-radius: 9999px; background: #fff; opacity: .9; }
+    .acct-flag.a1 { background: var(--a1); } .acct-flag.a2 { background: var(--a2); }
+    .card.acct-1 { border-left: 4px solid var(--a1); } .card.acct-2 { border-left: 4px solid var(--a2); }
 
     /* ---------- two sending accounts ---------- */
     .accts { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin-top: .7rem; }

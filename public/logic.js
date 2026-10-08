@@ -345,31 +345,53 @@
     return { lead, touches, days, ready: touches >= 3 && days !== null && days >= 2 };
   }
 
-  // Today's DM list: ready leads first (most touches first), the first free slots go to Account 1, the next to Account 2.
-  // Stable while you send: a lead that leaves the list frees a slot in the account that sent it, so nobody else changes account.
+  // Which account a lead belongs to is written in the Sheet ("DM Account"). Leads go in blocks of 10 in Sheet order:
+  // rows 1-10 → Account 1, 11-20 → Account 2, 21-30 → Account 1, and so on.
+  const blockAccount = (index) => ACCOUNTS[Math.floor(index / ACCOUNT_CAP) % ACCOUNTS.length];
+
+  // Account for a lead that is about to be added at the end of the sheet: carry on the current block of 10.
+  function nextNewLeadAccount(leads) {
+    const assigned = leads.filter((l) => ACCOUNTS.includes(l['DM Account'])).sort((a, b) => a._row - b._row);
+    if (!assigned.length) return ACCOUNTS[0];
+    const last = assigned[assigned.length - 1]['DM Account'];
+    let run = 0;
+    for (let i = assigned.length - 1; i >= 0 && assigned[i]['DM Account'] === last; i--) run++;
+    return run < ACCOUNT_CAP ? last : ACCOUNTS[(ACCOUNTS.indexOf(last) + 1) % ACCOUNTS.length];
+  }
+
+  // Today's DM list. Each account's list holds the READY leads assigned to it (most touches first), up to the slots it has left
+  // today; leads with no account yet fill whatever room is left (Account 1 first). A lead that is sent leaves the list and frees
+  // a slot in its own account, so nobody else changes account while you work through it.
   function buildDmQueue(leads, activity, today, includeNotReady) {
     const counts = dmsByAccountToday(activity, today);
     const warming = leads.filter((l) => l.Status === 'Warming').map((l) => warmupInfo(l, today));
     const pool = warming.filter((x) => includeNotReady || x.ready)
       .sort((a, b) => (b.ready - a.ready) || (b.touches - a.touches) || (a.lead._row - b.lead._row));
+    const room = {};
     const lists = {};
-    let idx = 0;
-    ACCOUNTS.forEach((a) => {
-      const room = Math.max(ACCOUNT_CAP - counts[a], 0);
-      lists[a] = pool.slice(idx, idx + room);
-      idx += room;
+    ACCOUNTS.forEach((a) => { room[a] = Math.max(ACCOUNT_CAP - counts[a], 0); lists[a] = []; });
+    const waiting = [];
+    pool.forEach((x) => {
+      const a = x.lead['DM Account'];
+      if (!ACCOUNTS.includes(a)) return;
+      if (lists[a].length < room[a]) lists[a].push(x); else waiting.push(x);
+    });
+    pool.forEach((x) => {
+      if (ACCOUNTS.includes(x.lead['DM Account'])) return;
+      const a = ACCOUNTS.find((acc) => lists[acc].length < room[acc]);
+      if (a) lists[a].push(x); else waiting.push(x);
     });
     return {
       counts, lists,
       readyTotal: warming.filter((x) => x.ready).length,
       notReadyTotal: warming.filter((x) => !x.ready).length,
       queued: ACCOUNTS.reduce((n, a) => n + lists[a].length, 0),
-      leftover: Math.max(pool.length - idx, 0),
+      leftover: waiting.length,
     };
   }
 
   return {
-    ACCOUNTS, ACCOUNT_CAP, accountOf, dmsByAccountToday, nextAccount, warmupInfo, buildDmQueue,
+    ACCOUNTS, ACCOUNT_CAP, accountOf, dmsByAccountToday, nextAccount, warmupInfo, blockAccount, nextNewLeadAccount, buildDmQueue,
     DEADLINE, DAILY_DM_CAP, PKG, PACKAGE_LABELS, ENUMS, MSG, FOLLOW_UPS, LOOM_STEPS, LOOM_RULE, REPLY_OPTIONS,
     todayISO, parseDate, normalizeDate, daysBetween, daysSince, parseFollowers,
     suggestPriority, suggestPackage, effectivePackage, mentionsPlatform,
