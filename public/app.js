@@ -20,18 +20,51 @@
   const $ = (sel) => document.querySelector(sel);
   const findLead = (row) => state.leads.find((l) => l._row === Number(row));
 
-  const STATUS_CLS = {
-    Warming: 'bg-amber-100 text-amber-800', 'DM Sent': 'bg-blue-100 text-blue-800', Replied: 'bg-violet-100 text-violet-800',
-    'Audit Sent': 'bg-cyan-100 text-cyan-800', 'Price Sent': 'bg-orange-100 text-orange-800', Closed: 'bg-green-100 text-green-800', Lost: 'bg-gray-200 text-gray-600',
+  // Lucide-style 24px stroke icons
+  const ICONS = {
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H16"/>',
+    refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+    video: '<rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="m16 10 5-3v10l-5-3"/>',
+    plug: '<path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0V8zM12 16v6"/>',
+    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
+    chev: '<path d="m9 6 6 6-6 6"/>',
+    flame: '<path d="M12 3c.6 3.6 4.8 5 4.8 9.6a4.8 4.8 0 0 1-9.6 0c0-1.9.9-3.1 1.9-4 .1 1.7.8 2.6 1.9 2.8C11 9 10.6 6 12 3z"/>',
+    bell: '<path d="M6 9a6 6 0 1 1 12 0c0 6.5 2.5 8 2.5 8h-17S6 15.500 6 9zM10 20.500a2.200 2.200 0 0 0 4 0"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13M3.500 6h.01M3.500 12h.01M3.500 18h.01"/>',
+    alert: '<path d="M12 9v4M12 17h.01M10.300 3.900 2.400 18a2 2 0 0 0 1.700 3h15.800a2 2 0 0 0 1.700-3L13.700 3.900a2 2 0 0 0-3.400 0z"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    send: '<path d="m22 2-11 11M22 2l-7 20-4-9-9-4z"/>',
+    note: '<path d="M5 3h10l4 4v14H5zM14 3v5h5M9 13h6M9 17h4"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.500"/><path d="M12 12h.01"/>',
+    users: '<path d="M16 20v-1.500a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20M9.500 11a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7zM21 20v-1.500a4 4 0 0 0-3-3.800M15.500 4.200a3.500 3.500 0 0 1 0 6.600"/>',
+    logo: '<path d="m5 12.500 4.500 4.500L19 7.500"/>',
   };
-  const PRIORITY_CLS = { High: 'bg-red-100 text-red-700', Medium: 'bg-yellow-100 text-yellow-800', Low: 'bg-gray-100 text-gray-600' };
-  const PKG_CLS = { [PKG.FULL]: 'bg-indigo-100 text-indigo-800', [PKG.ADDON]: 'bg-teal-100 text-teal-800', [PKG.SKIP]: 'bg-gray-200 text-gray-600' };
-  const chip = (text, cls) => (text ? `<span class="chip ${cls || 'bg-gray-100 text-gray-600'}">${esc(text)}</span>` : '');
+  const icon = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+
+  const STATUS_TONE = { Warming: 'amber', 'DM Sent': 'blue', Replied: 'violet', 'Audit Sent': 'cyan', 'Price Sent': 'orange', Closed: 'green', Lost: 'gray' };
+  const PRIORITY_TONE = { High: 'red', Medium: 'amber', Low: 'gray' };
+  const PKG_TONE = { [PKG.FULL]: 'indigo', [PKG.ADDON]: 'teal', [PKG.SKIP]: 'gray' };
+  const chip = (text, tone, dot) => (text ? `<span class="chip t-${tone || 'gray'}">${dot ? '<span class="dot"></span>' : ''}${esc(text)}</span>` : '');
+  const statusChip = (s) => chip(s, STATUS_TONE[s], true);
+
+  function initials(name) {
+    const w = String(name || '?').trim().split(/\s+/).filter(Boolean);
+    return ((w[0] || '?')[0] + (w.length > 1 ? w[1][0] : (w[0] || '')[1] || '')).toUpperCase();
+  }
+  function avatar(lead) {
+    const name = lead['Gym Name'] || '';
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+    return `<div class="avatar" style="--h:${h}" aria-hidden="true">${esc(initials(name))}</div>`;
+  }
 
   function igLink(lead) {
     const url = lead['Instagram Link'];
-    if (!url) return '<span class="text-xs text-gray-400">no IG link</span>';
-    return `<a href="${esc(url)}" target="_blank" rel="noopener" class="text-indigo-600 underline text-sm font-medium">Instagram ↗</a>`;
+    if (!url) return '<span class="faint text-xs">no IG link</span>';
+    return `<a href="${esc(url)}" target="_blank" rel="noopener" class="pill-link">Instagram ${icon('ext')}</a>`;
   }
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const ago = (date) => {
@@ -40,29 +73,31 @@
     return d === 0 ? 'today' : `${d}d ago`;
   };
 
-  function btn(label, action, data = {}, cls = '') {
-    const attrs = Object.entries(data).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('');
-    return `<button type="button" class="btn ${cls}" data-action="${action}"${attrs}>${label}</button>`;
+  function btn(label, action, data = {}, cls = '', ic = '') {
+    const { title, ...rest } = data;
+    const attrs = Object.entries(rest).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('') + (title ? ` title="${esc(title)}" aria-label="${esc(title)}"` : '');
+    return `<button type="button" class="btn ${cls}" data-action="${action}"${attrs}>${ic ? icon(ic) : ''}${label}</button>`;
   }
   const copyBtn = (text, label = 'Copy', extra = '') =>
-    `<button type="button" class="btn btn-copy ${extra}" data-action="copy" data-text="${esc(text)}">📋 ${esc(label)}</button>`;
+    `<button type="button" class="btn btn-primary btn-copy ${extra}" data-action="copy" data-text="${esc(text)}">${icon('copy')}${esc(label)}</button>`;
 
   // ---------------------------------------------------------------- toasts + errors
   function toast(msg, kind = 'ok') {
     const el = document.createElement('div');
-    const colors = kind === 'err' ? 'bg-red-600' : kind === 'warn' ? 'bg-amber-600' : 'bg-gray-900';
-    el.className = `${colors} text-white text-sm font-medium rounded-lg shadow-lg px-4 py-2.5 max-w-md pointer-events-auto`;
-    el.textContent = msg;
+    el.className = `toast ${kind === 'err' ? 'err' : kind === 'warn' ? 'warn' : ''}`;
+    el.innerHTML = `${icon(kind === 'ok' ? 'check' : 'alert')}<span></span>`;
+    el.lastChild.textContent = msg;
     $('#toasts').appendChild(el);
     setTimeout(() => el.remove(), kind === 'err' ? 7000 : 2200);
   }
 
   // Sticky red banner — stays until dismissed so a failed write can't be missed.
   function showError(msg) {
-    toast('⚠ Not saved — see red banner', 'err');
+    toast('Not saved — see red banner', 'err');
     const el = document.createElement('div');
-    el.className = 'pointer-events-auto max-w-3xl mx-auto bg-red-600 text-white rounded-lg shadow-lg px-4 py-3 text-sm flex gap-3 items-start';
-    el.innerHTML = `<div class="flex-1"><b>⚠ Sheet write failed — your change was NOT saved.</b><div class="mt-0.5 break-words">${esc(msg)}</div></div><button class="font-bold text-lg leading-none px-1" aria-label="Dismiss">×</button>`;
+    el.className = 'err-banner';
+    el.innerHTML = `<div style="margin-top:.1rem">${icon('alert')}</div><div class="flex-1 min-w-0"><b>Sheet write failed — your change was NOT saved.</b><div class="mt-0.5 break-words" style="opacity:.95"></div></div><button aria-label="Dismiss">${icon('x')}</button>`;
+    el.querySelector('.break-words').textContent = msg;
     el.querySelector('button').onclick = () => el.remove();
     $('#errors').appendChild(el);
   }
@@ -190,48 +225,84 @@
     if (ok) { state.modal.saved = true; renderModal(); }
   }
 
-  // ---------------------------------------------------------------- rendering: header
+  // ---------------------------------------------------------------- rendering: header + KPIs
   function renderHeader() {
     const t = today();
     const sent = L.dmsSentToday(state.activity, t);
     const cap = L.DAILY_DM_CAP;
     const daysLeft = L.daysBetween(t, L.DEADLINE);
     const counts = L.statusCounts(state.leads);
-    const capCls = sent >= cap ? 'bg-red-600 text-white' : sent >= cap - 3 ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white';
-    const deadlineTxt = daysLeft === null ? '' : daysLeft > 0 ? `${daysLeft} days left until Nov 3, 2026` : daysLeft === 0 ? 'Deadline is TODAY (Nov 3)' : `${-daysLeft} days past Nov 3 deadline`;
+    const due = L.dueToday(state.leads, state.activity, t);
+    const dueTotal = due.warmup.length + due.followups.length + due.price.length;
+    const open = state.leads.filter((l) => l.Status !== 'Closed' && l.Status !== 'Lost').length;
+    const capTone = sent >= cap ? 'kpi-danger' : sent >= cap - 3 ? 'kpi-warn' : 'kpi-ok';
+    const pct = Math.min(100, Math.round((sent / cap) * 100));
+    const dlValue = daysLeft === null ? '—' : String(Math.max(daysLeft, 0));
+    const dlText = daysLeft === null ? 'Nov 3, 2026' : daysLeft > 0 ? `days left until Nov 3, 2026` : daysLeft === 0 ? 'Deadline is today (Nov 3)' : `${-daysLeft} days past Nov 3 deadline`;
+    const total = state.leads.length || 1;
+    const segs = L.ENUMS.Status.filter((s) => counts[s]).map((s) => `<i class="t-${STATUS_TONE[s]}" style="flex:${counts[s]}" title="${esc(s)}: ${counts[s]}"></i>`);
+
     return `
-      <header class="mb-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <h1 class="text-lg font-bold mr-auto">💪 Lead Outreach</h1>
+      <div class="topbar">
+        <div class="logo">${icon('logo')}</div>
+        <div><div class="brand-title">Lead Outreach</div><div class="brand-sub">Trial-to-Member System</div></div>
+        <div class="topbar-actions">
           ${btn('+ Add Lead', 'openAdd', {}, 'btn-primary')}
-          ${btn('🎥 Loom script', 'openLoom')}
-          ${btn(state.loading ? '…' : '↻ Refresh', 'refresh')}
-          ${btn('Test Sheet', 'openTest')}
+          ${btn('<span class="hide-sm">Loom script</span>', 'openLoom', { title: 'Loom script' }, '', 'video')}
+          ${btn(`<span class="hide-sm">${state.loading ? 'Loading' : 'Refresh'}</span>`, 'refresh', { title: 'Refresh' }, '', 'refresh')}
+          ${btn('<span class="hide-sm">Test Sheet</span>', 'openTest', { title: 'Test Sheet connection' }, '', 'plug')}
         </div>
-        <div class="mt-2 flex flex-wrap items-center gap-2">
-          <div class="rounded-lg px-3 py-1.5 font-bold text-sm ${capCls}" id="dm-counter">DMs sent today: ${sent} / ${cap}</div>
-          ${deadlineTxt ? `<div class="rounded-lg px-3 py-1.5 bg-gray-900 text-white text-sm font-semibold">${esc(deadlineTxt)}</div>` : ''}
+      </div>
+
+      <div class="kpis mt-4">
+        <div class="card kpi ${capTone}" id="dm-counter">
+          <div class="kpi-label">DMs sent today</div>
+          <div class="kpi-value">${sent}<span class="kpi-of"> / ${cap}</span></div>
+          <div class="bar"><i style="width:${pct}%"></i></div>
+          <div class="kpi-sub">${sent >= cap ? 'Cap reached — stop for today' : `${cap - sent} left today`}</div>
         </div>
-        ${sent >= cap ? `<div class="mt-2 rounded-lg bg-red-50 border border-red-300 text-red-800 text-sm font-semibold px-3 py-2">⚠ Daily cap reached (${cap}). Stop sending DMs from the new account today.</div>` : ''}
-        <div class="mt-2 flex flex-wrap gap-1.5">
-          ${L.ENUMS.Status.map((s) => `<span class="chip ${STATUS_CLS[s]} text-xs">${esc(s)}: <b>${counts[s]}</b></span>`).join('')}
+        <div class="card kpi kpi-hero">
+          <div class="kpi-label">Deadline</div>
+          <div class="kpi-value">${dlValue}</div>
+          <div class="kpi-sub">${esc(dlText)}</div>
         </div>
-        ${state.warnings.map((w) => `<div class="mt-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-sm px-3 py-2">⚠ ${esc(w)}</div>`).join('')}
-      </header>`;
+        <div class="card kpi">
+          <div class="kpi-label">Due today</div>
+          <div class="kpi-value" style="${dueTotal ? '' : 'color:var(--ok)'}">${dueTotal}</div>
+          <div class="kpi-sub">${plural(due.warmup.length, 'touch', 'touches')} · ${plural(due.followups.length, 'follow-up', 'follow-ups')} · ${due.price.length} price</div>
+        </div>
+        <div class="card kpi">
+          <div class="kpi-label">Active leads</div>
+          <div class="kpi-value">${open}</div>
+          <div class="kpi-sub">${state.leads.length} total in Sheet</div>
+        </div>
+      </div>
+
+      ${sent >= cap ? `<div class="alert alert-danger">${icon('alert')}<div>Daily cap reached (${cap}). Stop sending DMs from the new account today.</div></div>` : ''}
+      ${state.warnings.map((w) => `<div class="alert alert-warn">${icon('alert')}<div>${esc(w)}</div></div>`).join('')}
+
+      <div class="card pipeline mt-3">
+        <div class="pipe-bar">${segs.join('') || ''}</div>
+        <div class="pipe-legend">
+          ${L.ENUMS.Status.map((s) => `<button type="button" class="pipe-pill t-${STATUS_TONE[s]} ${state.filters.status === s ? 'on' : ''}" data-action="filterStatus" data-status="${esc(s)}" title="Filter table by ${esc(s)}"><span class="dot"></span>${esc(s)} <b>${counts[s]}</b></button>`).join('')}
+        </div>
+      </div>`;
   }
 
   // ---------------------------------------------------------------- rendering: Due Today
   function dueEntry(lead, tag, body, buttons) {
     return `
-      <div class="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
-        <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span class="font-bold">${esc(lead['Gym Name'])}</span>
-          <span class="text-xs text-gray-500">${esc(lead.City)}</span>
-          ${igLink(lead)}
-          ${tag}
+      <div class="card entry fade-in">
+        <div class="entry-head">
+          ${avatar(lead)}
+          <div class="min-w-0 flex-1">
+            <div class="entry-name">${esc(lead['Gym Name'])}</div>
+            <div class="entry-meta">${lead.City ? `<span>${esc(lead.City)}</span>` : ''}${igLink(lead)}</div>
+          </div>
         </div>
+        ${tag ? `<div class="entry-tags">${tag}</div>` : ''}
         ${body}
-        <div class="mt-2 flex flex-wrap gap-2">${buttons}</div>
+        <div class="entry-actions">${buttons}</div>
       </div>`;
   }
 
@@ -239,39 +310,39 @@
     const due = L.dueToday(state.leads, state.activity, today());
     const section = (title, count, items, empty) => `
       <div>
-        <h3 class="text-sm font-bold text-gray-700 mb-1.5">${title} <span class="chip bg-gray-900 text-white ml-1">${count}</span></h3>
-        <div class="space-y-2">${items.join('') || `<div class="text-sm text-gray-400 px-1">${empty}</div>`}</div>
+        <div class="sub-title">${title} <span class="count">${count}</span></div>
+        <div class="space-y-2.5">${items.join('') || `<div class="empty">${icon('check')}${empty}</div>`}</div>
       </div>`;
 
     const warm = due.warmup.map(({ lead }) => dueEntry(lead,
-      chip(`${plural(parseInt(lead['Engagement Touches'], 10) || 0, 'touch', 'touches')}`, 'bg-amber-100 text-amber-800'),
-      '<div class="mt-2 text-sm text-gray-600">Leave a <b>real comment</b> on a recent post (something specific, not an emoji), then log it.</div>',
-      btn('+1 Touch', 'touch', { row: lead._row }, 'btn-green')));
+      chip(plural(parseInt(lead['Engagement Touches'], 10) || 0, 'touch', 'touches'), 'amber'),
+      '<div class="muted text-sm mt-3" style="line-height:1.45">Leave a <b style="color:var(--text)">real comment</b> on a recent post — something specific, not an emoji — then log it.</div>',
+      btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok')));
 
     const fu = due.followups.map((it) => {
       const lead = it.lead;
       if (it.type === 'lost') {
-        return dueEntry(lead, chip(`Day ${it.daysSinceDm} — no reply`, 'bg-red-100 text-red-700'),
-          it.text ? `<div class="mt-2 text-xs font-bold text-gray-500">Day 10 message not sent yet:</div><div class="msg">${esc(it.text)}</div>` : '<div class="mt-2 text-sm text-gray-600">All follow-ups sent, still no reply.</div>',
-          `${it.text ? copyBtn(it.text) : ''}${btn('Mark Lost', 'markLost', { row: lead._row }, 'btn-red')}`);
+        return dueEntry(lead, chip(`Day ${it.daysSinceDm} · no reply`, 'red'),
+          it.text ? `<div class="msg-label">Day 10 message not sent yet</div><div class="msg">${esc(it.text)}</div>` : '<div class="muted text-sm mt-3">All follow-ups sent, still no reply.</div>',
+          `${it.text ? copyBtn(it.text) : ''}${btn('Mark Lost', 'markLost', { row: lead._row }, 'btn-danger')}`);
       }
-      return dueEntry(lead, chip(`Day ${it.day} follow-up`, 'bg-blue-100 text-blue-800'),
-        `<div class="msg mt-2">${esc(it.text)}</div>`,
-        `${copyBtn(it.text)}${btn('Mark Sent', 'markFollowUp', { row: lead._row }, 'btn-green')}`);
+      return dueEntry(lead, chip(`Day ${it.day} follow-up`, 'blue'),
+        `<div class="msg">${esc(it.text)}</div>`,
+        `${copyBtn(it.text)}${btn('Mark Sent', 'markFollowUp', { row: lead._row }, 'btn-ok', 'send')}`);
     });
 
-    const pr = due.price.map((it) => dueEntry(it.lead, chip(`Quiet ${it.daysQuiet}d after price`, 'bg-orange-100 text-orange-800') + chip(L.effectivePackage(it.lead), PKG_CLS[L.effectivePackage(it.lead)]),
-      `<div class="msg mt-2">${esc(it.text)}</div>`,
-      `${copyBtn(it.text)}${btn('Mark Sent', 'markPriceFollowUp', { row: it.lead._row }, 'btn-green')}`));
+    const pr = due.price.map((it) => dueEntry(it.lead, chip(`Quiet ${it.daysQuiet}d`, 'orange') + chip(L.effectivePackage(it.lead), PKG_TONE[L.effectivePackage(it.lead)]),
+      `<div class="msg">${esc(it.text)}</div>`,
+      `${copyBtn(it.text)}${btn('Mark Sent', 'markPriceFollowUp', { row: it.lead._row }, 'btn-ok', 'send')}`));
 
     const total = due.warmup.length + due.followups.length + due.price.length;
     return `
-      <section class="mb-5">
-        <h2 class="text-base font-bold mb-2">📌 Due today <span class="chip ${total ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}">${total}</span></h2>
-        <div class="grid gap-4 lg:grid-cols-3 items-start">
-          ${section('a) Warm-up touches', due.warmup.length, warm, 'All warm-up leads touched today ✓')}
-          ${section('b) Follow-ups', due.followups.length, fu, 'No follow-ups due ✓')}
-          ${section('c) Price-sent, quiet 3+ days', due.price.length, pr, 'Nobody to nudge ✓')}
+      <section>
+        <h2 class="sec-title">${icon('bell')}Due today <span class="count ${total ? 'count-alert' : 'count-ok'}">${total}</span></h2>
+        <div class="grid gap-5 lg:grid-cols-3 items-start">
+          ${section('Warm-up touches', due.warmup.length, warm, 'All warm-up leads touched today')}
+          ${section('Follow-ups', due.followups.length, fu, 'No follow-ups due')}
+          ${section('Price sent · quiet 3+ days', due.price.length, pr, 'Nobody to nudge')}
         </div>
       </section>`;
   }
@@ -288,26 +359,29 @@
       if (touches < 3) warn.push(`only ${touches} touch${touches === 1 ? '' : 'es'} so far`);
       if (days === null || days < 2) warn.push(days === null ? 'no Engagement Started date' : `only ${days} day${days === 1 ? '' : 's'} since you started engaging`);
       const dm = L.dm1(lead);
+      const pips = [0, 1, 2].map((i) => `<i class="${i < touches ? (touches >= 3 ? 'full' : 'on') : ''}"></i>`).join('');
       return `
-        <div class="bg-white border ${ready && !sent ? 'border-emerald-400' : 'border-gray-200'} rounded-xl p-3 shadow-sm">
-          <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span class="font-bold">${esc(lead['Gym Name'])}</span>
-            <span class="text-xs text-gray-500">${esc(lead.City)}</span>
-            ${igLink(lead)}
-            ${sent ? chip('DM 1 sent ✓', 'bg-blue-100 text-blue-800') : ready ? chip('Ready for DM 1', 'bg-emerald-600 text-white') : ''}
+        <div class="card entry fade-in ${ready && !sent ? 'ready-ring' : ''}">
+          <div class="entry-head">
+            ${avatar(lead)}
+            <div class="min-w-0 flex-1">
+              <div class="entry-name">${esc(lead['Gym Name'])}</div>
+              <div class="entry-meta">${lead.City ? `<span>${esc(lead.City)}</span>` : ''}${igLink(lead)}</div>
+            </div>
           </div>
-          <div class="mt-1 text-sm text-gray-600"><b>${touches}</b> touch${touches === 1 ? '' : 'es'} · <b>${days === null ? '—' : days}</b> day${days === 1 ? '' : 's'} since started</div>
+          ${sent || ready ? `<div class="entry-tags">${sent ? chip('DM 1 sent', 'blue', true) : '<span class="chip chip-solid-ok">Ready for DM 1</span>'}</div>` : ''}
+          <div class="meter"><span class="pips">${pips}</span><span class="num">${touches} touch${touches === 1 ? '' : 'es'} · ${days === null ? '—' : days} day${days === 1 ? '' : 's'} since started</span></div>
           ${sent
-            ? `<div class="msg mt-2">${esc(dm)}</div><div class="mt-2 flex flex-wrap gap-2">${copyBtn(dm)}${btn('Done', 'dismissSent', { row: lead._row })}</div>`
-            : `${!ready ? `<div class="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">⚠ Soft warning: ${esc(warn.join(' and '))}. You can still send.</div>` : ''}
-               <div class="mt-2 flex flex-wrap gap-2">${btn('+1 Touch', 'touch', { row: lead._row }, 'btn-green')}${btn('Send DM 1', 'sendDm1', { row: lead._row }, ready ? 'btn-primary' : '')}</div>`}
+            ? `<div class="msg">${esc(dm)}</div><div class="entry-actions">${copyBtn(dm)}${btn('Done', 'dismissSent', { row: lead._row })}</div>`
+            : `${!ready ? `<div class="note mt-3">${icon('info')}<div>Soft warning: ${esc(warn.join(' and '))}. You can still send.</div></div>` : ''}
+               <div class="entry-actions">${btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok')}${btn('Send DM 1', 'sendDm1', { row: lead._row }, ready ? 'btn-primary' : '', 'send')}</div>`}
         </div>`;
     });
     return `
-      <section class="mb-5">
-        <h2 class="text-base font-bold mb-1">🔥 Warming <span class="chip bg-gray-900 text-white">${warming.length}</span></h2>
-        <div class="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-2">Real comments only — something specific about the post, not an emoji.</div>
-        <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">${cards.join('') || '<div class="text-sm text-gray-400 px-1">No leads warming up. Add one →</div>'}</div>
+      <section>
+        <h2 class="sec-title">${icon('flame')}Warming <span class="count">${warming.length}</span></h2>
+        <div class="note mb-3" style="font-weight:600">${icon('info')}<div>Real comments only — something specific about the post, not an emoji.</div></div>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">${cards.join('') || `<div class="empty sm:col-span-2 lg:col-span-3">${icon('users')}No leads warming up yet — tap + to add one.</div>`}</div>
       </section>`;
   }
 
@@ -336,33 +410,32 @@
       const opts = ['', ...L.ENUMS[field]];
       return `<select class="field" data-field-select="${field}" data-row="${lead._row}">${opts.map((o) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o || '—')}</option>`).join('')}</select>`;
     }
-    if ((field === 'Instagram Link' || field === 'Website Link') && v) return `<a href="${esc(v)}" target="_blank" rel="noopener" class="text-indigo-600 underline break-all">${esc(v)}</a>`;
-    return `<span class="break-words whitespace-pre-wrap">${esc(v) || '<span class="text-gray-300">—</span>'}</span>`;
+    if ((field === 'Instagram Link' || field === 'Website Link') && v) return `<a href="${esc(v)}" target="_blank" rel="noopener" class="break-all" style="color:var(--accent);text-decoration:underline">${esc(v)}</a>`;
+    return `<span class="break-words whitespace-pre-wrap">${esc(v) || '<span class="faint">—</span>'}</span>`;
   }
 
   function renderRow(lead) {
     const open = state.expanded.has(lead._row);
     const pkg = lead.Package || '';
     return `
-      <div class="bg-white border border-gray-200 rounded-xl shadow-sm">
-        <div class="p-3 cursor-pointer" data-action="toggleRow" data-row="${lead._row}">
-          <div class="flex items-start gap-2">
-            <div class="flex-1 min-w-0">
-              <div class="font-bold truncate">${esc(lead['Gym Name'])} <span class="font-normal text-xs text-gray-500">${esc(lead.City)}</span></div>
-              <div class="mt-1 flex flex-wrap gap-1">${chip(lead.Status, STATUS_CLS[lead.Status])}${chip(lead.Priority && `${lead.Priority} priority`, PRIORITY_CLS[lead.Priority])}${chip(pkg, PKG_CLS[pkg])}</div>
-            </div>
-            <div class="text-right text-xs text-gray-500 shrink-0">Last contact<br><b class="text-gray-800">${esc(ago(lead['Last Contact Date']))}</b></div>
-            <div class="text-gray-400 select-none">${open ? '▾' : '▸'}</div>
+      <div class="card lead-row fade-in">
+        <div class="lead-top" data-action="toggleRow" data-row="${lead._row}">
+          ${avatar(lead)}
+          <div class="flex-1 min-w-0">
+            <div class="entry-name">${esc(lead['Gym Name'])}${lead.City ? ` <span class="muted" style="font-weight:500;font-size:.75rem">· ${esc(lead.City)}</span>` : ''}</div>
+            <div class="entry-tags" style="margin-top:.4rem">${statusChip(lead.Status)}${chip(lead.Priority && `${lead.Priority} priority`, PRIORITY_TONE[lead.Priority])}${chip(pkg, PKG_TONE[pkg])}</div>
           </div>
+          <div class="last-contact shrink-0">Last contact<b>${esc(ago(lead['Last Contact Date']))}</b></div>
+          <span class="chev ${open ? 'open' : ''}">${icon('chev')}</span>
         </div>
-        <div class="px-3 pb-3 flex flex-wrap gap-2" data-stop>
-          ${btn('Log Reply', 'openReply', { row: lead._row }, 'btn-primary')}
-          ${btn('Copy follow-up', 'copyFollowUp', { row: lead._row })}
-          ${btn('+1 Touch', 'touch', { row: lead._row })}
-          ${btn('Edit Notes', 'openNotes', { row: lead._row })}
+        <div class="lead-actions">
+          ${btn('Log Reply', 'openReply', { row: lead._row }, 'btn-primary btn-sm', 'send')}
+          ${btn('Copy follow-up', 'copyFollowUp', { row: lead._row }, 'btn-sm', 'copy')}
+          ${btn('+1 Touch', 'touch', { row: lead._row }, 'btn-sm')}
+          ${btn('Edit Notes', 'openNotes', { row: lead._row }, 'btn-sm', 'note')}
         </div>
-        ${open ? `<div class="border-t border-gray-100 px-3 py-3 grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
-          ${FIELDS.map((f) => `<div class="${f === 'Problem' || f === 'Notes' ? 'sm:col-span-2' : ''}"><span class="lbl">${f}${f === 'Package' ? ' (sheet col 20)' : ''}</span><div class="text-sm">${detailValue(lead, f)}</div></div>`).join('')}
+        ${open ? `<div class="lead-detail">
+          ${FIELDS.map((f) => `<div class="${f === 'Problem' || f === 'Notes' ? 'span-2' : ''}"><span class="lbl">${f}${f === 'Package' ? ' (column 20)' : ''}</span><div class="text-sm">${detailValue(lead, f)}</div></div>`).join('')}
         </div>` : ''}
       </div>`;
   }
@@ -372,15 +445,15 @@
     const opt = (v, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(v)}</option>`;
     const list = visibleLeads();
     return `
-      <section>
-        <h2 class="text-base font-bold mb-2">📋 All leads <span class="chip bg-gray-900 text-white">${list.length}${list.length !== state.leads.length ? ` / ${state.leads.length}` : ''}</span></h2>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+      <section id="leads">
+        <h2 class="sec-title">${icon('list')}All leads <span class="count">${list.length}${list.length !== state.leads.length ? ` / ${state.leads.length}` : ''}</span></h2>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
           <select class="field" data-filter="city"><option value="">All cities</option>${cities.map((c) => opt(c, state.filters.city)).join('')}</select>
           <select class="field" data-filter="priority"><option value="">All priorities</option>${L.ENUMS.Priority.map((c) => opt(c, state.filters.priority)).join('')}</select>
           <select class="field" data-filter="status"><option value="">All statuses</option>${L.ENUMS.Status.map((c) => opt(c, state.filters.status)).join('')}</select>
-          ${btn(`Last contact: ${state.sortDir === 'desc' ? 'newest first ↓' : 'oldest first ↑'}`, 'toggleSort')}
+          ${btn(`Last contact: ${state.sortDir === 'desc' ? 'newest ↓' : 'oldest ↑'}`, 'toggleSort', {}, '!h-auto min-h-[2.6rem]')}
         </div>
-        <div class="space-y-2">${list.map(renderRow).join('') || '<div class="text-sm text-gray-400 px-1">No leads match.</div>'}</div>
+        <div class="space-y-2.5 lead-list">${list.map(renderRow).join('') || `<div class="empty">${icon('info')}No leads match these filters.</div>`}</div>
       </section>`;
   }
 
@@ -388,24 +461,24 @@
     const app = $('#app');
     if (!state.loaded) {
       app.innerHTML = renderHeader() + (state.loadError
-        ? `<div class="rounded-xl bg-red-50 border border-red-300 text-red-800 p-4 text-sm"><b>Couldn't load leads from the Sheet.</b><div class="mt-1 break-words">${esc(state.loadError)}</div><div class="mt-3 flex gap-2">${btn('Retry', 'refresh', {}, 'btn-primary')}${btn('Run connection test', 'openTest')}</div></div>`
-        : '<div class="text-sm text-gray-500 p-4">Loading from Google Sheets…</div>');
+        ? `<div class="alert alert-danger" style="display:block"><b>Couldn't load leads from the Sheet.</b><div class="mt-1 break-words" style="font-weight:500">${esc(state.loadError)}</div><div class="mt-3 flex gap-2">${btn('Retry', 'refresh', {}, 'btn-primary', 'refresh')}${btn('Run connection test', 'openTest', {}, '', 'plug')}</div></div>`
+        : '<div class="space-y-3 mt-5"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton" style="height:8rem"></div></div>');
       return;
     }
-    // Keep scroll + focus when re-rendering after a write.
     app.innerHTML = renderHeader() + renderDue() + renderWarming() + renderTable();
   }
 
   // ---------------------------------------------------------------- modals
   function modalShell(title, inner) {
     return `
-      <div class="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" data-action="modalBackdrop">
-        <div class="bg-white w-full sm:max-w-2xl max-h-[94vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-xl" role="dialog" aria-label="${esc(title)}">
-          <div class="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-2 z-10">
-            <h2 class="font-bold flex-1 truncate">${title}</h2>
-            <button class="btn" data-action="closeModal">Close ✕</button>
+      <div class="overlay" data-action="modalBackdrop">
+        <div class="sheet" role="dialog" aria-label="${esc(title)}">
+          <div class="grab"></div>
+          <div class="sheet-head">
+            <h2>${title}</h2>
+            <button class="btn btn-sm" data-action="closeModal">${icon('x')}Close</button>
           </div>
-          <div class="p-4">${inner}</div>
+          <div class="sheet-body">${inner}</div>
         </div>
       </div>`;
   }
@@ -421,7 +494,7 @@
       const lead = findLead(m.row);
       root.innerHTML = modalShell(`Notes — ${esc(lead['Gym Name'])}`, `
         <textarea id="notes-text" class="field" rows="8">${esc(lead.Notes)}</textarea>
-        <div class="mt-3 flex gap-2">${btn('Save notes', 'saveNotes', {}, 'btn-primary')}${btn('Cancel', 'closeModal')}</div>`);
+        <div class="mt-3 flex gap-2">${btn('Save notes', 'saveNotes', {}, 'btn-primary btn-lg', 'check')}${btn('Cancel', 'closeModal', {}, 'btn-lg')}</div>`);
       setTimeout(() => { const t = $('#notes-text'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 0);
     } else if (m.type === 'loom') root.innerHTML = modalShell('Loom script', loomHtml(m.row ? findLead(m.row) : null));
     else if (m.type === 'test') root.innerHTML = modalShell('Sheet connection test', testHtml());
@@ -435,39 +508,39 @@
     return `<select class="field" name="${name}" ${required ? 'required' : ''}><option value="">${placeholder}</option>${opts.map((o) => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
   }
   const inp = (name, type = 'text', extra = '') => `<input class="field" name="${name}" type="${type}" ${extra} autocomplete="off">`;
-  const fld = (label, inner, cls = '') => `<label class="block ${cls}"><span class="lbl">${label}</span>${inner}</label>`;
+  const fld = (label, inner, cls = 'col-span-2 sm:col-span-1') => `<label class="block ${cls}"><span class="lbl">${label}</span>${inner}</label>`;
 
   function addFormHtml() {
     const E = L.ENUMS;
     return `
-      <form id="add-form" class="grid gap-3 sm:grid-cols-2" novalidate>
+      <form id="add-form" class="grid grid-cols-2 items-end gap-3.5" novalidate>
         ${fld('Gym Name *', inp('Gym Name', 'text', 'required'))}
         ${fld('City', inp('City'))}
         ${fld('Instagram Link (or @handle)', inp('Instagram Link', 'text', 'inputmode="url"'))}
-        ${fld('Followers', inp('Followers', 'text', 'inputmode="numeric" placeholder="e.g. 4200 or 4.2k"'))}
-        ${fld('Last Post Date', inp('Last Post Date', 'date'))}
+        ${fld('Followers', inp('Followers', 'text', 'inputmode="numeric" placeholder="e.g. 4200 or 4.2k"'), 'col-span-1')}
+        ${fld('Last Post Date', inp('Last Post Date', 'date'), 'col-span-1')}
         ${fld('Owner Name', inp('Owner Name'))}
         ${fld('Website Link', inp('Website Link', 'text', 'inputmode="url"'))}
-        ${fld('Website Quality *', selectHtml('Website Quality', E['Website Quality'], { required: true }))}
-        ${fld('Bio Link Type', selectHtml('Bio Link Type', E['Bio Link Type']))}
-        ${fld('Has Booking Form', selectHtml('Has Booking Form', E['Has Booking Form']))}
-        ${fld('Has Follow-up Automation', selectHtml('Has Follow-up Automation', E['Has Follow-up Automation'], { value: 'Unknown' }))}
+        ${fld('Website Quality *', selectHtml('Website Quality', E['Website Quality'], { required: true }), 'col-span-1')}
+        ${fld('Bio Link Type', selectHtml('Bio Link Type', E['Bio Link Type']), 'col-span-1')}
+        ${fld('Has Booking Form', selectHtml('Has Booking Form', E['Has Booking Form']), 'col-span-1')}
+        ${fld('Has Follow-up Automation', selectHtml('Has Follow-up Automation', E['Has Follow-up Automation'], { value: 'Unknown' }), 'col-span-1')}
         ${fld('Current Offer * (picks the DM 1 wording)', selectHtml('Current Offer', E['Current Offer'], { required: true }))}
-        ${fld('Problem', '<textarea class="field" name="Problem" rows="2"></textarea>', 'sm:col-span-2')}
-        <div class="sm:col-span-2 grid gap-3 sm:grid-cols-2 bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+        ${fld('Problem', '<textarea class="field" name="Problem" rows="2"></textarea>', 'col-span-2')}
+        <div class="col-span-2 grid gap-3.5 sm:grid-cols-2 suggest">
           <div>
             ${fld('Priority (suggested — override if you like)', selectHtml('Priority', E.Priority, { placeholder: '—' }))}
-            <div id="priority-hint" class="text-xs text-indigo-800 mt-1"></div>
+            <div id="priority-hint" class="hint"></div>
           </div>
           <div>
             ${fld('Package (suggested — override if you like)', selectHtml('Package', E.Package, { placeholder: '—' }))}
-            <div id="package-hint" class="text-xs text-indigo-800 mt-1"></div>
+            <div id="package-hint" class="hint"></div>
           </div>
         </div>
-        ${fld('Notes', '<textarea class="field" name="Notes" rows="2" placeholder="e.g. uses Mindbody → Low priority"></textarea>', 'sm:col-span-2')}
-        <div class="sm:col-span-2 text-xs text-gray-500">On save: Status = Warming · Engagement Started = today · Touches = 0</div>
-        <div class="sm:col-span-2 flex gap-2">
-          <button type="submit" class="btn btn-primary flex-1 !py-3 !text-base" id="add-submit">Add lead to Sheet</button>
+        ${fld('Notes', '<textarea class="field" name="Notes" rows="2" placeholder="e.g. uses Mindbody → Low priority"></textarea>', 'col-span-2')}
+        <div class="col-span-2 muted text-xs">On save: Status = Warming · Engagement Started = today · Touches = 0</div>
+        <div class="col-span-2">
+          <button type="submit" class="btn btn-primary btn-lg btn-block" id="add-submit">Add lead to Sheet</button>
         </div>
       </form>`;
   }
@@ -528,6 +601,7 @@
     }
   }
 
+
   // ----- Reply handler
   function replyHtml() {
     const m = state.modal;
@@ -537,24 +611,24 @@
     const options = L.REPLY_OPTIONS.map((o) => {
       const av = L.replyAvailability(o.key, lead, today());
       const sel = m.key === o.key;
-      const star = (o.key === 'priceFull' || o.key === 'priceAddon') && o.key === rec ? ' <span class="text-emerald-700">✓ matches package</span>' : '';
-      return `<button type="button" class="btn w-full !justify-start text-left ${o.indent ? 'ml-5 !w-[calc(100%-1.25rem)]' : ''} ${sel ? 'btn-primary' : ''}" ${av.ok ? '' : 'aria-disabled="true" disabled'} data-action="pickReply" data-key="${o.key}">
-        <span>${esc(o.label)}${star}${av.ok ? '' : `<span class="block font-normal text-xs opacity-80">${esc(av.reason)}</span>`}</span></button>`;
+      const match = (o.key === 'priceFull' || o.key === 'priceAddon') && o.key === rec ? '<span class="match">✓ matches package</span>' : '';
+      return `<button type="button" class="opt ${o.indent ? 'indent' : ''} ${sel ? 'sel' : ''}" ${av.ok ? '' : 'aria-disabled="true" disabled'} data-action="pickReply" data-key="${o.key}">
+        <span class="radio"></span><span class="flex-1">${esc(o.label)}${match}${av.ok ? '' : `<small>${esc(av.reason)}</small>`}</span></button>`;
     }).join('');
 
     let result = '';
     if (m.key) {
       const r = L.buildReply(m.key, lead, today());
       const parts = [];
-      if (r.instruction) parts.push(`<div class="rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-sm font-semibold p-3">📝 Instruction: ${esc(r.instruction)}</div>`);
-      r.messages.forEach((msg) => parts.push(`<div><div class="lbl">${esc(msg.label)}</div><div class="msg">${esc(msg.text)}</div><div class="mt-2">${copyBtn(msg.text, 'Copy message', 'w-full sm:w-auto')}</div></div>`));
+      if (r.instruction) parts.push(`<div class="note" style="font-weight:600">${icon('info')}<div>Instruction: ${esc(r.instruction)}</div></div>`);
+      r.messages.forEach((msg) => parts.push(`<div><div class="lbl">${esc(msg.label)}</div><div class="msg" style="margin-top:0">${esc(msg.text)}</div><div class="mt-2.5">${copyBtn(msg.text, 'Copy message', 'btn-block sm:w-auto')}</div></div>`));
       if (r.laterMessage) {
         parts.push(m.step2
-          ? `<div><div class="lbl">${esc(r.laterMessage.label)}</div><div class="msg">${esc(r.laterMessage.text)}</div><div class="mt-2">${copyBtn(r.laterMessage.text, 'Copy Step 2', 'w-full sm:w-auto')}</div></div>`
-          : `<div class="rounded-lg border border-dashed border-gray-300 p-3 text-sm text-gray-600">Send Step 1 first. Don't offer the video until they respond.<div class="mt-2">${btn('Show Step 2 (after they respond)', 'showStep2')}</div></div>`);
+          ? `<div><div class="lbl">${esc(r.laterMessage.label)}</div><div class="msg" style="margin-top:0">${esc(r.laterMessage.text)}</div><div class="mt-2.5">${copyBtn(r.laterMessage.text, 'Copy Step 2', 'btn-block sm:w-auto')}</div></div>`
+          : `<div class="empty" style="display:block">Send Step 1 first. Don't offer the video until they respond.<div class="mt-2.5">${btn('Show Step 2 (after they respond)', 'showStep2')}</div></div>`);
       }
       if (r.loom) {
-        parts.push(`<div class="rounded-lg bg-cyan-50 border border-cyan-200 p-3"><div class="font-bold text-sm mb-1">🎥 Pre-record checklist (Loom, 1.5–2 min, face on camera)</div>${loomHtml(lead, true)}</div>`);
+        parts.push(`<div class="suggest"><div class="font-bold text-sm mb-2.5">Pre-record checklist · Loom, 1.5–2 min, face on camera</div>${loomHtml(lead, true)}</div>`);
       }
       const changes = [];
       if (r.setStatus && r.setStatus !== lead.Status) changes.push(`Status → ${r.setStatus}`);
@@ -562,42 +636,42 @@
       if (r.logEvent) changes.push('mark price follow-up sent');
       changes.push('Last Contact → today');
       if (m.key === 'priceFull' || m.key === 'priceAddon') {
-        if (rec && m.key !== rec) parts.push(`<div class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">Heads up: this lead's package is <b>${esc(pkg)}</b>, but you picked the other price message. Saving will switch Package to match what you quote.</div>`);
-        if (!rec) parts.push(`<div class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">This lead's package is ${esc(pkg || 'not set')} — double-check you're quoting the right tier.</div>`);
+        if (rec && m.key !== rec) parts.push(`<div class="note">${icon('alert')}<div>This lead's package is <b>${esc(pkg)}</b>, but you picked the other price message. Saving will switch Package to match what you quote.</div></div>`);
+        if (!rec) parts.push(`<div class="note">${icon('alert')}<div>This lead's package is ${esc(pkg || 'not set')} — double-check you're quoting the right tier.</div></div>`);
       }
       parts.push(m.saved
-        ? '<div class="text-sm font-bold text-emerald-700">✓ Saved to Sheet. Copy the message above if you haven\'t yet.</div>'
-        : `<div>${btn(`Save: ${esc(changes.join(' · '))}`, 'applyReply', {}, 'btn-green !py-3 w-full sm:w-auto')}<div class="text-xs text-gray-500 mt-1">Copy the message first, send it, then save.</div></div>`);
-      result = `<div class="mt-4 space-y-3 border-t border-gray-200 pt-4">${parts.join('')}</div>`;
+        ? `<div class="font-bold text-sm" style="color:var(--ok);display:flex;gap:.4rem;align-items:center">${icon('check')}Saved to Sheet. Copy the message above if you haven't yet.</div>`
+        : `<div>${btn(`Save: ${esc(changes.join(' · '))}`, 'applyReply', {}, 'btn-ok btn-lg btn-block', 'check')}<div class="muted text-xs mt-1.5">Copy the message first, send it, then save.</div></div>`);
+      result = `<div class="mt-5 space-y-4 pt-5" style="border-top:1px solid var(--border)">${parts.join('')}</div>`;
     }
     return `
-      <div class="flex flex-wrap gap-1.5 mb-3">${chip(lead.Status, STATUS_CLS[lead.Status])}${chip(pkg || 'Package not set', PKG_CLS[pkg])}</div>
-      <div class="space-y-1.5">${options}</div>${result}`;
+      <div class="flex flex-wrap gap-1.5 mb-3.5">${statusChip(lead.Status)}${chip(pkg || 'Package not set', PKG_TONE[pkg])}</div>
+      <div class="space-y-2">${options}</div>${result}`;
   }
 
   // ----- Loom script
   function loomHtml(lead, checklist = false) {
     const steps = L.loomStepsFor(lead);
     const addonNote = lead && L.effectivePackage(lead) === PKG.ADDON
-      ? '<div class="text-xs text-teal-800 bg-teal-50 border border-teal-200 rounded px-2 py-1 mb-2">This lead is on the Follow-up Add-on — keep the demo on the confirmation, reminder and follow-ups; don\'t promise the booking page.</div>' : '';
+      ? `<div class="note mb-3" style="--warn:#14b8a6">${icon('info')}<div>This lead is on the Follow-up Add-on — keep the demo on the confirmation, reminder and follow-ups; don't promise the booking page.</div></div>` : '';
     return `
       ${addonNote}
-      <ol class="space-y-2">
-        ${steps.map((s) => `<li class="flex gap-2"><span class="chip bg-gray-900 text-white h-fit">${s.n}</span><div class="text-sm">${checklist ? '<input type="checkbox" class="mr-1.5 align-middle">' : ''}<b>${esc(s.name)} (${s.secs}s)</b> — ${esc(s.text)}</div></li>`).join('')}
+      <ol class="space-y-3" style="list-style:none;padding:0;margin:0">
+        ${steps.map((s) => `<li class="step"><span class="step-n">${s.n}</span><div class="text-sm" style="line-height:1.45;padding-top:.1rem">${checklist ? '<input type="checkbox">' : ''}<b>${esc(s.name)}</b><span class="secs">${s.secs}s</span><div class="mt-0.5" style="color:var(--muted)">${esc(s.text)}</div></div></li>`).join('')}
       </ol>
-      <div class="mt-3 text-sm font-bold text-red-700">🚫 ${esc(L.LOOM_RULE)}</div>`;
+      <div class="rule">${icon('x')}${esc(L.LOOM_RULE)}</div>`;
   }
 
   // ----- Connection test
   function testHtml() {
     const t = state.modal;
-    if (t.running) return '<div class="text-sm text-gray-500">Testing read + write against your Sheet…</div>';
+    if (t.running) return '<div class="space-y-2"><div class="skeleton" style="height:3rem"></div><div class="skeleton" style="height:3rem"></div><div class="muted text-sm">Testing read + write against your Sheet…</div></div>';
     const steps = (t.result && t.result.steps) || [];
     return `
-      <div class="space-y-1.5">${steps.map((s) => `<div class="text-sm ${s.ok ? 'text-emerald-800' : 'text-red-700'}"><b>${s.ok ? '✓' : '✗'} ${esc(s.name)}</b><div class="text-xs break-words ${s.ok ? 'text-gray-500' : ''}">${esc(s.detail)}</div></div>`).join('')}</div>
-      ${t.error ? `<div class="text-sm text-red-700 break-words">${esc(t.error)}</div>` : ''}
-      ${t.result && t.result.ok ? '<div class="mt-3 font-bold text-emerald-700">All good — read and write both work.</div>' : ''}
-      <div class="mt-3">${btn('Run again', 'openTest')}</div>`;
+      <div class="space-y-2.5">${steps.map((s) => `<div class="card" style="padding:.7rem .85rem;box-shadow:none"><div class="text-sm font-bold" style="color:${s.ok ? 'var(--ok)' : 'var(--danger)'};display:flex;gap:.45rem;align-items:center">${icon(s.ok ? 'check' : 'x')}${esc(s.name)}</div><div class="text-xs mt-1 break-words muted">${esc(s.detail)}</div></div>`).join('')}</div>
+      ${t.error ? `<div class="alert alert-danger" style="display:block"><span class="break-words">${esc(t.error)}</span></div>` : ''}
+      ${t.result && t.result.ok ? `<div class="mt-3 font-bold" style="color:var(--ok)">All good — read and write both work.</div>` : ''}
+      <div class="mt-4">${btn('Run again', 'openTest', {}, '', 'refresh')}</div>`;
   }
 
   async function runTestModal() {
@@ -623,6 +697,7 @@
     markLost: (d) => markLost(d.row),
     copyFollowUp: (d) => copyFollowUp(d.row),
     toggleRow: (d) => { const r = Number(d.row); state.expanded.has(r) ? state.expanded.delete(r) : state.expanded.add(r); render(); },
+    filterStatus: (d) => { state.filters.status = state.filters.status === d.status ? '' : d.status; render(); const el = document.getElementById('leads'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     toggleSort: () => { state.sortDir = state.sortDir === 'desc' ? 'asc' : 'desc'; render(); },
     openAdd: () => { state.modal = { type: 'add' }; renderModal(); },
     openLoom: () => { state.modal = { type: 'loom' }; renderModal(); },
@@ -642,7 +717,6 @@
   };
 
   document.addEventListener('click', (e) => {
-    if (e.target.closest('[data-stop]') && !e.target.closest('[data-action]')) return;
     const el = e.target.closest('[data-action]');
     if (!el || el.disabled) return;
     const h = handlers[el.dataset.action];

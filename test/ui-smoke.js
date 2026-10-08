@@ -10,6 +10,11 @@ const { start } = require('./devServer.js');
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--no-sandbox'] });
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await ctx.newPage();
+  // If the Tailwind CDN is unreachable (CI/sandbox), TW_CSS=/path/to/built.css injects equivalent styles.
+  if (process.env.TW_CSS) {
+    const css = require('node:fs').readFileSync(process.env.TW_CSS, 'utf8');
+    await page.route('**/cdn.tailwindcss.com/**', (r) => r.fulfill({ contentType: 'text/javascript', body: `const s=document.createElement('style');s.textContent=${JSON.stringify(css)};document.head.appendChild(s);` }));
+  }
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/tailwind|ERR_|Failed to load resource/i.test(m.text())) errs.push(m.text()); });
@@ -21,7 +26,7 @@ const { start } = require('./devServer.js');
 
   // header
   let t = await txt();
-  assert.match(t, /DMs sent today: 0 \/ 20/); assert.match(t, /days left until Nov 3, 2026/); step('header counter + deadline');
+  assert.match(t, /DMs sent today\s+0 \/ 20/); assert.match(t, /days left until Nov 3, 2026/); step('header counter + deadline');
   // Due today
   assert.match(t, /Hey Sam, just floating this back up/); step('Day 3 follow-up due');
   assert.match(t, /If \$300 isn't right for now/); step('price-quiet uses add-on wording for add-on lead');
@@ -35,7 +40,7 @@ const { start } = require('./devServer.js');
   await page.waitForSelector('#toasts :text("Copied")'); step('copy toast');
 
   // +1 Touch on Warm Fresh (Warming panel)
-  const card = page.locator('section:has(h2:text("Warming")) div.bg-white', { hasText: 'Warm Fresh' });
+  const card = page.locator('section:has(h2:text("Warming")) .card', { hasText: 'Warm Fresh' });
   await card.locator('button:text("+1 Touch")').click();
   await page.waitForSelector('#toasts :text("Touch #2 saved")');
   const grid = () => fake.__grids.get('Leads');
@@ -43,7 +48,7 @@ const { start } = require('./devServer.js');
   assert.equal(rowOf('Warm Fresh')[18], 2); step('+1 Touch persisted to Sheet (touches=2)');
 
   // Send DM 1 on Warm Ready -> status DM Sent, text + copy shown, counter 1
-  const ready = page.locator('section:has(h2:text("Warming")) div.bg-white', { hasText: 'Warm Ready' });
+  const ready = page.locator('section:has(h2:text("Warming")) .card', { hasText: 'Warm Ready' });
   await ready.locator('button:text("Send DM 1")').click();
   await page.waitForSelector('#toasts :text("DM Sent")');
   assert.equal(rowOf('Warm Ready')[14], 'DM Sent');
@@ -53,19 +58,19 @@ const { start } = require('./devServer.js');
 
   // Mark Sent Day 3 follow-up
   const due = page.locator('section:has(h2:text("Due today"))');
-  await due.locator('div.bg-white', { hasText: 'Day3 Gym' }).locator('button:text("Mark Sent")').click();
+  await due.locator('.card', { hasText: 'Day3 Gym' }).locator('button:text("Mark Sent")').click();
   await page.waitForSelector('#toasts :text("Day 3 follow-up marked sent")');
   const today = new Date().toISOString().slice(0, 10);
   assert.ok(fake.__grids.get('Activity').some((r) => r[2] === 'Day3 Gym' && r[4] === 'Follow-up'));
   assert.doesNotMatch(await due.innerText(), /Day3 Gym/); step('follow-up marked sent, leaves Due Today, logged');
 
   // Mark Lost
-  await due.locator('div.bg-white', { hasText: 'Old Silent' }).locator('button:text("Mark Lost")').click();
+  await due.locator('.card', { hasText: 'Old Silent' }).locator('button:text("Mark Lost")').click();
   await page.waitForSelector('#toasts :text("Marked Lost")');
   assert.equal(rowOf('Old Silent')[14], 'Lost'); step('Mark Lost');
 
   // Reply handler: manual (two-step)
-  const rowCard = (name) => page.locator('section:has(h2:text("All leads")) > div.space-y-2 > div', { hasText: name });
+  const rowCard = (name) => page.locator('.lead-list > .card', { hasText: name });
   await rowCard('Price Quiet').locator('button:text("Log Reply")').click();
   const modal = page.locator('[role=dialog]');
   await modal.locator('button', { hasText: 'Manually / no system' }).click();
@@ -120,7 +125,7 @@ const { start } = require('./devServer.js');
 
   // Filters
   await page.selectOption('[data-filter=city]', 'Dallas');
-  let names = await page.locator('section:has(h2:text("All leads")) > div.space-y-2 > div .font-bold').allInnerTexts();
+  let names = await page.locator('.lead-list > .card .entry-name').allInnerTexts();
   assert.ok(names.length && names.every((n) => /Warm Fresh|Price Quiet/.test(n)), names.join('|')); step('city filter');
   await page.selectOption('[data-filter=city]', '');
 
@@ -159,13 +164,13 @@ const { start } = require('./devServer.js');
   assert.equal(nr[17], today); assert.equal(nr[18], 0); assert.equal(nr[19], 'Follow-up Add-on'); step('lead appended: Warming, started today, touches 0, Package saved');
 
   // Loom panel
-  await page.click('button:text("🎥 Loom script")');
+  await page.click('.topbar [data-action=openLoom]');
   m = await modal.innerText();
   assert.match(m, /If the Trial-to-Member System looks useful, reply and I'll walk you through pricing\./); assert.match(m, /\[X\] leads/); step('static Loom panel');
   await modal.locator('button:text("Close")').click();
 
   // Test connection button
-  await page.click('button:text("Test Sheet")');
+  await page.click('.topbar [data-action=openTest]');
   await page.waitForSelector('text=All good — read and write both work.'); step('Test Sheet button');
   await modal.locator('button:text("Close")').click();
 
@@ -177,7 +182,7 @@ const { start } = require('./devServer.js');
   // cap warning: 20 DMs
   const act = fake.__grids.get('Activity');
   for (let i = 0; i < 19; i++) act.push([new Date().toISOString(), today, `Fake ${i}`, 'X', 'DM Sent', '']);
-  await page.click('button:text("↻ Refresh")');
+  await page.click('.topbar [data-action=refresh]');
   await page.waitForSelector('#dm-counter:has-text("20 / 20")');
   assert.match(await txt(), /Daily cap reached/); step('cap warning at 20');
 
