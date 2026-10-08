@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lead Outreach</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💪</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html { -webkit-text-size-adjust: 100%; }
+    body { background: #f3f4f6; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:.35rem; border-radius:.5rem; font-weight:600;
+           font-size:.8125rem; line-height:1.1; padding:.55rem .75rem; border:1px solid #d1d5db; background:#fff; color:#111827;
+           min-height:2.25rem; cursor:pointer; user-select:none; }
+    .btn:hover { background:#f9fafb; }
+    .btn:disabled, .btn[aria-disabled="true"] { opacity:.45; cursor:not-allowed; }
+    .btn-primary { background:#4f46e5; border-color:#4f46e5; color:#fff; }
+    .btn-primary:hover { background:#4338ca; }
+    .btn-green { background:#059669; border-color:#059669; color:#fff; }
+    .btn-green:hover { background:#047857; }
+    .btn-red { background:#fff; border-color:#fca5a5; color:#b91c1c; }
+    .btn-copy { font-size:1rem; padding:.85rem 1.25rem; min-height:3rem; background:#4f46e5; border-color:#4f46e5; color:#fff; }
+    .btn-copy:hover { background:#4338ca; }
+    .field { width:100%; border:1px solid #d1d5db; border-radius:.5rem; padding:.5rem .6rem; font-size:.9375rem; background:#fff; min-height:2.5rem; }
+    .field:focus { outline:2px solid #6366f1; outline-offset:0; border-color:#6366f1; }
+    .lbl { display:block; font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:#6b7280; margin-bottom:.2rem; }
+    .msg { white-space:pre-wrap; background:#f9fafb; border:1px solid #e5e7eb; border-radius:.5rem; padding:.6rem .75rem; font-size:.9375rem; line-height:1.4; }
+    .chip { display:inline-block; font-size:.6875rem; font-weight:700; border-radius:9999px; padding:.1rem .5rem; border:1px solid transparent; white-space:nowrap; }
+    details > summary { cursor:pointer; list-style:none; }
+    details > summary::-webkit-details-marker { display:none; }
+  </style>
+</head>
+<body class="text-gray-900 antialiased">
+  <div id="errors" class="fixed top-0 inset-x-0 z-[60] p-2 space-y-2 pointer-events-none"></div>
+  <main id="app" class="max-w-5xl mx-auto px-3 pb-24 pt-3 sm:px-4"></main>
+  <div id="modal-root"></div>
+  <div id="toasts" class="fixed bottom-4 inset-x-0 z-[70] flex flex-col items-center gap-2 px-3 pointer-events-none"></div>
+  <script src="logic.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

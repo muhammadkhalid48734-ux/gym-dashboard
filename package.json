@@ -1,0 +1,16 @@
+{
+  "name": "gym-lead-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Internal lead-outreach dashboard for the Trial-to-Member System (Google Sheets backed, Vercel serverless)",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "dev:mock": "node test/devServer.js"
+  },
+  "dependencies": {
+    "googleapis": "^184.0.0"
+  }
+}
