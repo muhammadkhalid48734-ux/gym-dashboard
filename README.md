@@ -42,6 +42,20 @@ No credentials handy? `SEED=1 npm run dev:mock` serves the UI on an in-memory fa
 ## Heads-up: it has no login
 As specified, there is no auth. Anyone who has the URL can read and write your leads. Keep the URL private and consider switching on **Vercel → Settings → Deployment Protection** for the project.
 
+## Using it (the menu bar)
+The bar under the header switches between views. The badge on each tab is a live count.
+
+| Tab | What's in it |
+|---|---|
+| **Today** | Everything due right now: warm-up touches, follow-ups (Day 3 / 6 / 10, or Mark Lost after Day 10), and price-sent leads quiet for 3+ days. Each has the message, a big **Copy** button and **Mark Sent**. |
+| **Warming** | Leads you're engaging with before any DM. **+1 Touch** counts a real comment; **Preview DM 1** shows the opening message without changing anything; **Send DM 1** sets Status = DM Sent. "Ready for DM 1" appears at 3+ touches and 2+ days. |
+| **Follow-ups** | Everyone whose DM 1 went out with no reply: due ones on top, the rest with a "next follow-up in N days" countdown. |
+| **Replies** | Replied / Audit Sent / Price Sent leads. **Log Reply** gives the next message to send. |
+| **All leads** | Full list with City / Priority / Status filters and sort by last contact. Tap a row for all 20 fields. |
+| **Scripts** | Every message template (DM 1 variants, follow-ups, reply scripts, Loom script) with Copy buttons. |
+
+The search box (right of the tabs) filters by gym, city, owner or notes. The DM counter and deadline stay visible on every tab.
+
 ## How it works
 
 **Sheet tab `Leads`** — 20 columns, in order: Gym Name, City, Instagram Link, Followers, Last Post Date, Owner Name, Website Link, Website Quality, Bio Link Type, Has Booking Form, Has Follow-up Automation, Current Offer, Problem, Priority, Status, Last Contact Date, Notes, Engagement Started, Engagement Touches, **Package** (`Trial-to-Member System` | `Follow-up Add-on` | `Skip`). Dates are stored as `YYYY-MM-DD` text. Edit cells in the Sheet freely, then hit **Refresh**; don't insert/delete/sort rows while the page is open (a write to a row that no longer matches is refused and nothing is written).

@@ -10,6 +10,9 @@
     sortDir: 'desc',                 // Last Contact: desc = most recent first
     expanded: new Set(),             // sheet rows with details open
     justSent: new Set(),             // rows whose DM 1 was just marked sent (keep the text + Copy visible)
+    tab: (location.hash || '').replace('#', '') || 'today',
+    query: '',                       // search box text
+    preview: new Set(),              // warming rows with the DM 1 preview open (status unchanged)
     modal: null,                     // { type: 'add'|'reply'|'notes'|'loom'|'test', ... }
   };
   const inflight = new Set();
@@ -41,6 +44,7 @@
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.500"/><path d="M12 12h.01"/>',
     users: '<path d="M16 20v-1.500a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20M9.500 11a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7zM21 20v-1.500a4 4 0 0 0-3-3.800M15.500 4.200a3.500 3.500 0 0 1 0 6.600"/>',
     logo: '<path d="m5 12.500 4.500 4.500L19 7.500"/>',
+    msg: '<path d="M21 12a8 8 0 0 1-11.600 7.100L3 21l1.900-6.400A8 8 0 1 1 21 12z"/>',
   };
   const icon = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
 
@@ -225,23 +229,33 @@
     if (ok) { state.modal.saved = true; renderModal(); }
   }
 
-  // ---------------------------------------------------------------- rendering: header + KPIs
+  // ---------------------------------------------------------------- rendering: header + status strip
+  const TABS = [
+    { key: 'today', label: 'Today', icon: 'bell' },
+    { key: 'warming', label: 'Warming', icon: 'flame' },
+    { key: 'followups', label: 'Follow-ups', icon: 'send' },
+    { key: 'replies', label: 'Replies', icon: 'msg' },
+    { key: 'all', label: 'All leads', icon: 'list' },
+    { key: 'scripts', label: 'Scripts', icon: 'note' },
+  ];
+  const SEARCH_TABS = ['warming', 'followups', 'replies', 'all'];
+  if (!TABS.some((tb) => tb.key === state.tab)) state.tab = 'today';
+  let dueCache = null; // recomputed once per render()
+
+  const matchesQuery = (l) => {
+    const q = state.query.trim().toLowerCase();
+    return !q || `${l['Gym Name']} ${l.City} ${l['Owner Name']} ${l.Notes}`.toLowerCase().includes(q);
+  };
+
   function renderHeader() {
     const t = today();
     const sent = L.dmsSentToday(state.activity, t);
     const cap = L.DAILY_DM_CAP;
     const daysLeft = L.daysBetween(t, L.DEADLINE);
-    const counts = L.statusCounts(state.leads);
-    const due = L.dueToday(state.leads, state.activity, t);
-    const dueTotal = due.warmup.length + due.followups.length + due.price.length;
-    const open = state.leads.filter((l) => l.Status !== 'Closed' && l.Status !== 'Lost').length;
     const capTone = sent >= cap ? 'kpi-danger' : sent >= cap - 3 ? 'kpi-warn' : 'kpi-ok';
     const pct = Math.min(100, Math.round((sent / cap) * 100));
     const dlValue = daysLeft === null ? '—' : String(Math.max(daysLeft, 0));
-    const dlText = daysLeft === null ? 'Nov 3, 2026' : daysLeft > 0 ? `days left until Nov 3, 2026` : daysLeft === 0 ? 'Deadline is today (Nov 3)' : `${-daysLeft} days past Nov 3 deadline`;
-    const total = state.leads.length || 1;
-    const segs = L.ENUMS.Status.filter((s) => counts[s]).map((s) => `<i class="t-${STATUS_TONE[s]}" style="flex:${counts[s]}" title="${esc(s)}: ${counts[s]}"></i>`);
-
+    const dlText = daysLeft === null ? 'Nov 3, 2026' : daysLeft > 0 ? 'days left until Nov 3, 2026' : daysLeft === 0 ? 'Deadline is today (Nov 3)' : `${-daysLeft} days past Nov 3 deadline`;
     return `
       <div class="topbar">
         <div class="logo">${icon('logo')}</div>
@@ -254,42 +268,58 @@
         </div>
       </div>
 
-      <div class="kpis mt-4">
-        <div class="card kpi ${capTone}" id="dm-counter">
-          <div class="kpi-label">DMs sent today</div>
-          <div class="kpi-value">${sent}<span class="kpi-of"> / ${cap}</span></div>
+      <div class="strip mt-3">
+        <div class="card strip-dm ${capTone}" id="dm-counter">
+          <div class="strip-label">DMs sent today</div>
+          <div class="flex items-baseline gap-2"><span class="strip-num num">${sent}<span class="kpi-of"> / ${cap}</span></span>
+            <span class="strip-sub">${sent >= cap ? 'cap reached — stop for today' : `${cap - sent} left`}</span></div>
           <div class="bar"><i style="width:${pct}%"></i></div>
-          <div class="kpi-sub">${sent >= cap ? 'Cap reached — stop for today' : `${cap - sent} left today`}</div>
         </div>
-        <div class="card kpi kpi-hero">
-          <div class="kpi-label">Deadline</div>
-          <div class="kpi-value">${dlValue}</div>
-          <div class="kpi-sub">${esc(dlText)}</div>
-        </div>
-        <div class="card kpi">
-          <div class="kpi-label">Due today</div>
-          <div class="kpi-value" style="${dueTotal ? '' : 'color:var(--ok)'}">${dueTotal}</div>
-          <div class="kpi-sub">${plural(due.warmup.length, 'touch', 'touches')} · ${plural(due.followups.length, 'follow-up', 'follow-ups')} · ${due.price.length} price</div>
-        </div>
-        <div class="card kpi">
-          <div class="kpi-label">Active leads</div>
-          <div class="kpi-value">${open}</div>
-          <div class="kpi-sub">${state.leads.length} total in Sheet</div>
-        </div>
+        <div class="card strip-dl kpi-hero"><span class="strip-num num">${dlValue}</span><span class="strip-sub" style="color:rgba(255,255,255,.85)">${esc(dlText)}</span></div>
       </div>
-
       ${sent >= cap ? `<div class="alert alert-danger">${icon('alert')}<div>Daily cap reached (${cap}). Stop sending DMs from the new account today.</div></div>` : ''}
-      ${state.warnings.map((w) => `<div class="alert alert-warn">${icon('alert')}<div>${esc(w)}</div></div>`).join('')}
+      ${state.warnings.map((w) => `<div class="alert alert-warn">${icon('alert')}<div>${esc(w)}</div></div>`).join('')}`;
+  }
 
+  function renderTabs(counts) {
+    return `
+      <nav class="tabs-wrap" aria-label="Sections">
+        <div class="tabs" role="tablist">
+          ${TABS.map((tb) => `<button type="button" role="tab" class="tab ${state.tab === tb.key ? 'on' : ''}" aria-selected="${state.tab === tb.key}" data-action="setTab" data-tab="${tb.key}">${icon(tb.icon)}<span>${tb.label}</span>${counts[tb.key] !== undefined ? `<span class="count ${tb.key === 'today' && counts.today ? 'count-alert' : ''}">${counts[tb.key]}</span>` : ''}</button>`).join('')}
+        </div>
+        <input id="q" class="field search ${SEARCH_TABS.includes(state.tab) ? '' : 'hidden md:block md:invisible'}" type="search" placeholder="Search gym, city, owner…" value="${esc(state.query)}" autocomplete="off" aria-label="Search leads">
+      </nav>`;
+  }
+
+  // ---------------------------------------------------------------- rendering: Today overview tiles + pipeline
+  function renderOverview() {
+    const counts = L.statusCounts(state.leads);
+    const due = dueCache;
+    const dueTotal = due.warmup.length + due.followups.length + due.price.length;
+    const open = state.leads.filter((l) => l.Status !== 'Closed' && l.Status !== 'Lost').length;
+    const replies = counts.Replied + counts['Audit Sent'] + counts['Price Sent'];
+    const segs = L.ENUMS.Status.filter((s) => counts[s]).map((s) => `<i class="t-${STATUS_TONE[s]}" style="flex:${counts[s]}" title="${esc(s)}: ${counts[s]}"></i>`);
+    return `
+      <div class="kpis">
+        <div class="card kpi"><div class="kpi-label">Due today</div>
+          <div class="kpi-value" style="${dueTotal ? '' : 'color:var(--ok)'}">${dueTotal}</div>
+          <div class="kpi-sub">${plural(due.warmup.length, 'touch', 'touches')} · ${plural(due.followups.length, 'follow-up', 'follow-ups')} · ${due.price.length} price</div></div>
+        <div class="card kpi"><div class="kpi-label">Active leads</div>
+          <div class="kpi-value">${open}</div><div class="kpi-sub">${state.leads.length} total in Sheet</div></div>
+        <div class="card kpi"><div class="kpi-label">Waiting on a reply</div>
+          <div class="kpi-value">${counts['DM Sent']}</div><div class="kpi-sub">DM 1 sent, no answer yet</div></div>
+        <div class="card kpi"><div class="kpi-label">In conversation</div>
+          <div class="kpi-value">${replies}</div><div class="kpi-sub">replied · audit · price sent</div></div>
+      </div>
       <div class="card pipeline mt-3">
-        <div class="pipe-bar">${segs.join('') || ''}</div>
+        <div class="pipe-bar">${segs.join('')}</div>
         <div class="pipe-legend">
-          ${L.ENUMS.Status.map((s) => `<button type="button" class="pipe-pill t-${STATUS_TONE[s]} ${state.filters.status === s ? 'on' : ''}" data-action="filterStatus" data-status="${esc(s)}" title="Filter table by ${esc(s)}"><span class="dot"></span>${esc(s)} <b>${counts[s]}</b></button>`).join('')}
+          ${L.ENUMS.Status.map((s) => `<button type="button" class="pipe-pill t-${STATUS_TONE[s]}" data-action="filterStatus" data-status="${esc(s)}" title="Open ${esc(s)} leads"><span class="dot"></span>${esc(s)} <b>${counts[s]}</b></button>`).join('')}
         </div>
       </div>`;
   }
 
-  // ---------------------------------------------------------------- rendering: Due Today
+  // ---------------------------------------------------------------- rendering: entry cards (Today / Warming / Follow-ups / Replies)
   function dueEntry(lead, tag, body, buttons) {
     return `
       <div class="card entry fade-in">
@@ -306,55 +336,64 @@
       </div>`;
   }
 
-  function renderDue() {
-    const due = L.dueToday(state.leads, state.activity, today());
-    const section = (title, count, items, empty) => `
-      <div>
-        <div class="sub-title">${title} <span class="count">${count}</span></div>
-        <div class="space-y-2.5">${items.join('') || `<div class="empty">${icon('check')}${empty}</div>`}</div>
-      </div>`;
+  const warmEntry = ({ lead }) => dueEntry(lead,
+    chip(plural(parseInt(lead['Engagement Touches'], 10) || 0, 'touch', 'touches'), 'amber'),
+    '<div class="muted text-sm mt-3" style="line-height:1.45">Leave a <b style="color:var(--text)">real comment</b> on a recent post — something specific, not an emoji — then log it.</div>',
+    btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok'));
 
-    const warm = due.warmup.map(({ lead }) => dueEntry(lead,
-      chip(plural(parseInt(lead['Engagement Touches'], 10) || 0, 'touch', 'touches'), 'amber'),
-      '<div class="muted text-sm mt-3" style="line-height:1.45">Leave a <b style="color:var(--text)">real comment</b> on a recent post — something specific, not an emoji — then log it.</div>',
-      btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok')));
-
-    const fu = due.followups.map((it) => {
-      const lead = it.lead;
-      if (it.type === 'lost') {
-        return dueEntry(lead, chip(`Day ${it.daysSinceDm} · no reply`, 'red'),
-          it.text ? `<div class="msg-label">Day 10 message not sent yet</div><div class="msg">${esc(it.text)}</div>` : '<div class="muted text-sm mt-3">All follow-ups sent, still no reply.</div>',
-          `${it.text ? copyBtn(it.text) : ''}${btn('Mark Lost', 'markLost', { row: lead._row }, 'btn-danger')}`);
-      }
-      return dueEntry(lead, chip(`Day ${it.day} follow-up`, 'blue'),
-        `<div class="msg">${esc(it.text)}</div>`,
-        `${copyBtn(it.text)}${btn('Mark Sent', 'markFollowUp', { row: lead._row }, 'btn-ok', 'send')}`);
-    });
-
-    const pr = due.price.map((it) => dueEntry(it.lead, chip(`Quiet ${it.daysQuiet}d`, 'orange') + chip(L.effectivePackage(it.lead), PKG_TONE[L.effectivePackage(it.lead)]),
+  function followupEntry(it) {
+    const lead = it.lead;
+    if (it.type === 'lost') {
+      return dueEntry(lead, chip(`Day ${it.daysSinceDm} · no reply`, 'red'),
+        it.text ? `<div class="msg-label">Day 10 message not sent yet</div><div class="msg">${esc(it.text)}</div>` : '<div class="muted text-sm mt-3">All follow-ups sent, still no reply.</div>',
+        `${it.text ? copyBtn(it.text) : ''}${btn('Mark Lost', 'markLost', { row: lead._row }, 'btn-danger')}`);
+    }
+    return dueEntry(lead, chip(`Day ${it.day} follow-up`, 'blue'),
       `<div class="msg">${esc(it.text)}</div>`,
-      `${copyBtn(it.text)}${btn('Mark Sent', 'markPriceFollowUp', { row: it.lead._row }, 'btn-ok', 'send')}`));
+      `${copyBtn(it.text)}${btn('Mark Sent', 'markFollowUp', { row: lead._row }, 'btn-ok', 'send')}`);
+  }
 
+  const priceEntry = (it) => dueEntry(it.lead,
+    chip(`Quiet ${it.daysQuiet}d`, 'orange') + chip(L.effectivePackage(it.lead), PKG_TONE[L.effectivePackage(it.lead)]),
+    `<div class="msg">${esc(it.text)}</div>`,
+    `${copyBtn(it.text)}${btn('Mark Sent', 'markPriceFollowUp', { row: it.lead._row }, 'btn-ok', 'send')}`);
+
+  const group = (title, count, items, empty) => `
+    <div>
+      <div class="sub-title">${title} <span class="count">${count}</span></div>
+      <div class="space-y-2.5">${items.join('') || `<div class="empty">${icon('check')}${empty}</div>`}</div>
+    </div>`;
+
+  const WARM_LIMIT = 5; // Today shows the first few; the Warming tab has the full list
+
+  function renderDue() {
+    const due = dueCache;
     const total = due.warmup.length + due.followups.length + due.price.length;
     return `
       <section>
         <h2 class="sec-title">${icon('bell')}Due today <span class="count ${total ? 'count-alert' : 'count-ok'}">${total}</span></h2>
         <div class="grid gap-5 lg:grid-cols-3 items-start">
-          ${section('Warm-up touches', due.warmup.length, warm, 'All warm-up leads touched today')}
-          ${section('Follow-ups', due.followups.length, fu, 'No follow-ups due')}
-          ${section('Price sent · quiet 3+ days', due.price.length, pr, 'Nobody to nudge')}
+          ${group('Warm-up touches', due.warmup.length, due.warmup.slice(0, WARM_LIMIT).map(warmEntry).concat(due.warmup.length > WARM_LIMIT ? [`<button type="button" class="btn btn-block" data-action="setTab" data-tab="warming">See all ${due.warmup.length} in the Warming tab →</button>`] : []), 'All warm-up leads touched today')}
+          ${group('Follow-ups', due.followups.length, due.followups.map(followupEntry), 'No follow-ups due')}
+          ${group('Price sent · quiet 3+ days', due.price.length, due.price.map(priceEntry), 'Nobody to nudge')}
         </div>
       </section>`;
   }
 
-  // ---------------------------------------------------------------- rendering: Warming panel
+  // ---------------------------------------------------------------- rendering: Warming tab
   function renderWarming() {
-    const warming = state.leads.filter((l) => l.Status === 'Warming' || state.justSent.has(l._row));
-    const cards = warming.map((lead) => {
+    const warming = state.leads.filter((l) => (l.Status === 'Warming' || state.justSent.has(l._row)) && matchesQuery(l));
+    const info = (lead) => {
       const touches = parseInt(lead['Engagement Touches'], 10) || 0;
       const days = L.daysSince(lead['Engagement Started'], today());
-      const ready = touches >= 3 && days !== null && days >= 2;
+      return { touches, days, ready: touches >= 3 && days !== null && days >= 2 };
+    };
+    warming.sort((a, b) => (info(b).ready - info(a).ready) || (info(b).touches - info(a).touches));
+    const readyCount = warming.filter((l) => info(l).ready && !state.justSent.has(l._row)).length;
+    const cards = warming.map((lead) => {
+      const { touches, days, ready } = info(lead);
       const sent = state.justSent.has(lead._row);
+      const showDm = sent || state.preview.has(lead._row);
       const warn = [];
       if (touches < 3) warn.push(`only ${touches} touch${touches === 1 ? '' : 'es'} so far`);
       if (days === null || days < 2) warn.push(days === null ? 'no Engagement Started date' : `only ${days} day${days === 1 ? '' : 's'} since you started engaging`);
@@ -371,37 +410,44 @@
           </div>
           ${sent || ready ? `<div class="entry-tags">${sent ? chip('DM 1 sent', 'blue', true) : '<span class="chip chip-solid-ok">Ready for DM 1</span>'}</div>` : ''}
           <div class="meter"><span class="pips">${pips}</span><span class="num">${touches} touch${touches === 1 ? '' : 'es'} · ${days === null ? '—' : days} day${days === 1 ? '' : 's'} since started</span></div>
-          ${sent
-            ? `<div class="msg">${esc(dm)}</div><div class="entry-actions">${copyBtn(dm)}${btn('Done', 'dismissSent', { row: lead._row })}</div>`
-            : `${!ready ? `<div class="note mt-3">${icon('info')}<div>Soft warning: ${esc(warn.join(' and '))}. You can still send.</div></div>` : ''}
-               <div class="entry-actions">${btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok')}${btn('Send DM 1', 'sendDm1', { row: lead._row }, ready ? 'btn-primary' : '', 'send')}</div>`}
+          ${!sent && !ready ? `<div class="note mt-3">${icon('info')}<div>Soft warning: ${esc(warn.join(' and '))}. You can still send.</div></div>` : ''}
+          ${showDm ? `<div class="msg-label">DM 1${sent ? '' : ' (preview — status not changed)'}</div><div class="msg">${esc(dm)}</div>` : ''}
+          <div class="entry-actions">
+            ${sent
+              ? `${copyBtn(dm)}${btn('Done', 'dismissSent', { row: lead._row })}`
+              : `${showDm ? copyBtn(dm) : ''}${btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok')}${btn('Send DM 1', 'sendDm1', { row: lead._row }, ready ? 'btn-primary' : '', 'send')}${showDm ? btn('Hide', 'togglePreview', { row: lead._row }, 'btn-sm') : btn('Preview DM 1', 'togglePreview', { row: lead._row }, '', 'note')}`}
+          </div>
         </div>`;
     });
     return `
       <section>
-        <h2 class="sec-title">${icon('flame')}Warming <span class="count">${warming.length}</span></h2>
+        <h2 class="sec-title">${icon('flame')}Warming <span class="count">${warming.length}</span>${readyCount ? `<span class="chip chip-solid-ok">${readyCount} ready for DM 1</span>` : ''}</h2>
         <div class="note mb-3" style="font-weight:600">${icon('info')}<div>Real comments only — something specific about the post, not an emoji.</div></div>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">${cards.join('') || `<div class="empty sm:col-span-2 lg:col-span-3">${icon('users')}No leads warming up yet — tap + to add one.</div>`}</div>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">${cards.join('') || `<div class="empty sm:col-span-2 lg:col-span-3">${icon('users')}${state.query ? 'No warming leads match your search.' : 'No leads warming up yet — tap + to add one.'}</div>`}</div>
       </section>`;
   }
 
-  // ---------------------------------------------------------------- rendering: Lead table
+  // ---------------------------------------------------------------- rendering: lead rows (Follow-ups / Replies / All leads)
   const FIELDS = ['Gym Name', 'City', 'Instagram Link', 'Followers', 'Last Post Date', 'Owner Name', 'Website Link', 'Website Quality', 'Bio Link Type',
     'Has Booking Form', 'Has Follow-up Automation', 'Current Offer', 'Problem', 'Priority', 'Status', 'Last Contact Date', 'Notes',
     'Engagement Started', 'Engagement Touches', 'Package'];
 
-  function visibleLeads() {
-    const f = state.filters;
-    const list = state.leads.filter((l) => (!f.city || l.City === f.city) && (!f.priority || l.Priority === f.priority) && (!f.status || l.Status === f.status));
+  const lastContactMs = (l) => L.parseDate(l['Last Contact Date']);
+  function sortByLastContact(list) {
     const dir = state.sortDir === 'asc' ? 1 : -1;
     return list.sort((a, b) => {
-      const x = L.parseDate(a['Last Contact Date']);
-      const y = L.parseDate(b['Last Contact Date']);
+      const x = lastContactMs(a);
+      const y = lastContactMs(b);
       if (x === null && y === null) return 0;
       if (x === null) return 1;        // never-contacted rows always last
       if (y === null) return -1;
       return (x - y) * dir;
     });
+  }
+
+  function visibleLeads() {
+    const f = state.filters;
+    return sortByLastContact(state.leads.filter((l) => (!f.city || l.City === f.city) && (!f.priority || l.Priority === f.priority) && (!f.status || l.Status === f.status) && matchesQuery(l)));
   }
 
   function detailValue(lead, field) {
@@ -414,7 +460,7 @@
     return `<span class="break-words whitespace-pre-wrap">${esc(v) || '<span class="faint">—</span>'}</span>`;
   }
 
-  function renderRow(lead) {
+  function renderRow(lead, extra = '') {
     const open = state.expanded.has(lead._row);
     const pkg = lead.Package || '';
     return `
@@ -423,7 +469,7 @@
           ${avatar(lead)}
           <div class="flex-1 min-w-0">
             <div class="entry-name">${esc(lead['Gym Name'])}${lead.City ? ` <span class="muted" style="font-weight:500;font-size:.75rem">· ${esc(lead.City)}</span>` : ''}</div>
-            <div class="entry-tags" style="margin-top:.4rem">${statusChip(lead.Status)}${chip(lead.Priority && `${lead.Priority} priority`, PRIORITY_TONE[lead.Priority])}${chip(pkg, PKG_TONE[pkg])}</div>
+            <div class="entry-tags" style="margin-top:.4rem">${statusChip(lead.Status)}${chip(lead.Priority && `${lead.Priority} priority`, PRIORITY_TONE[lead.Priority])}${chip(pkg, PKG_TONE[pkg])}${extra}</div>
           </div>
           <div class="last-contact shrink-0">Last contact<b>${esc(ago(lead['Last Contact Date']))}</b></div>
           <span class="chev ${open ? 'open' : ''}">${icon('chev')}</span>
@@ -440,6 +486,54 @@
       </div>`;
   }
 
+  // ---------------------------------------------------------------- rendering: Follow-ups tab
+  function renderFollowups() {
+    const due = dueCache;
+    const dueByRow = new Map(due.followups.map((it) => [it.lead._row, it]));
+    const sentLeads = state.leads.filter((l) => l.Status === 'DM Sent');
+    const dueItems = due.followups.filter((it) => matchesQuery(it.lead));
+    const waiting = sentLeads.filter((l) => !dueByRow.has(l._row) && matchesQuery(l)).map((l) => ({ l, s: L.dmState(l, state.activity, today()) }))
+      .sort((a, b) => (b.s.daysSinceDm || 0) - (a.s.daysSinceDm || 0));
+    const rows = waiting.map(({ l, s }) => {
+      const sentN = s.followUpsSent;
+      const next = sentN < L.FOLLOW_UPS.length ? L.FOLLOW_UPS[sentN].day : null;
+      const extra = chip(s.daysSinceDm === null ? 'DM date unknown' : `DM 1: ${s.daysSinceDm}d ago`, 'gray')
+        + (next && s.daysSinceDm !== null ? chip(`Next: Day ${next} follow-up in ${Math.max(next - s.daysSinceDm, 0)}d`, 'blue') : '');
+      return renderRow(l, extra);
+    });
+    return `
+      <section>
+        <h2 class="sec-title">${icon('send')}Follow-ups <span class="count">${sentLeads.length}</span></h2>
+        <div class="muted text-sm mb-3" style="line-height:1.5">Everyone whose DM 1 went out and hasn't replied. Follow-ups are due on Day 3, 6 and 10 after DM 1; after Day 10 the lead can be marked Lost.</div>
+        <div class="sub-title">Due now <span class="count ${dueItems.length ? 'count-alert' : 'count-ok'}">${dueItems.length}</span></div>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 items-start mb-6">${dueItems.map(followupEntry).join('') || `<div class="empty sm:col-span-2 lg:col-span-3">${icon('check')}No follow-ups due right now</div>`}</div>
+        <div class="sub-title">Waiting <span class="count">${waiting.length}</span></div>
+        <div class="space-y-2.5 lead-list">${rows.join('') || `<div class="empty">${icon('info')}${state.query ? 'No matches.' : 'Nobody waiting.'}</div>`}</div>
+      </section>`;
+  }
+
+  // ---------------------------------------------------------------- rendering: Replies tab (Replied / Audit Sent / Price Sent)
+  function renderReplies() {
+    const priceDue = dueCache.price.filter((it) => matchesQuery(it.lead));
+    const dueRows = new Set(dueCache.price.map((it) => it.lead._row));
+    const groups = ['Replied', 'Audit Sent', 'Price Sent'].map((st) => {
+      const list = sortByLastContact(state.leads.filter((l) => l.Status === st && matchesQuery(l)));
+      return `
+        <div class="mb-6">
+          <div class="sub-title">${statusChip(st)} <span class="count">${list.length}</span></div>
+          <div class="space-y-2.5 lead-list">${list.map((l) => renderRow(l, dueRows.has(l._row) ? chip('Quiet 3+ days', 'orange') : '')).join('') || `<div class="empty">${icon('info')}None</div>`}</div>
+        </div>`;
+    });
+    return `
+      <section>
+        <h2 class="sec-title">${icon('msg')}Replies <span class="count">${state.leads.filter((l) => ['Replied', 'Audit Sent', 'Price Sent'].includes(l.Status)).length}</span></h2>
+        <div class="muted text-sm mb-3" style="line-height:1.5">Leads who answered. Tap <b>Log Reply</b> on a row to get the next message to send.</div>
+        ${priceDue.length ? `<div class="sub-title">Price sent · quiet 3+ days <span class="count count-alert">${priceDue.length}</span></div><div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 items-start mb-6">${priceDue.map(priceEntry).join('')}</div>` : ''}
+        ${groups.join('')}
+      </section>`;
+  }
+
+  // ---------------------------------------------------------------- rendering: All leads tab
   function renderTable() {
     const cities = [...new Set(state.leads.map((l) => l.City).filter(Boolean))].sort();
     const opt = (v, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(v)}</option>`;
@@ -453,8 +547,65 @@
           <select class="field" data-filter="status"><option value="">All statuses</option>${L.ENUMS.Status.map((c) => opt(c, state.filters.status)).join('')}</select>
           ${btn(`Last contact: ${state.sortDir === 'desc' ? 'newest ↓' : 'oldest ↑'}`, 'toggleSort', {}, '!h-auto min-h-[2.6rem]')}
         </div>
-        <div class="space-y-2.5 lead-list">${list.map(renderRow).join('') || `<div class="empty">${icon('info')}No leads match these filters.</div>`}</div>
+        <div class="space-y-2.5 lead-list">${list.map((l) => renderRow(l)).join('') || `<div class="empty">${icon('info')}No leads match these filters.</div>`}</div>
       </section>`;
+  }
+
+  // ---------------------------------------------------------------- rendering: Scripts tab (message library, read-only reference)
+  function renderScripts() {
+    const ph = { 'Owner Name': '[owner]', 'Gym Name': '[gym]' };
+    const block = (label, text, note) => `
+      <div class="card entry">
+        <div class="msg-label" style="margin-top:0">${esc(label)}</div>
+        ${note ? `<div class="muted text-xs mt-1">${esc(note)}</div>` : ''}
+        <div class="msg">${esc(text)}</div>
+        <div class="entry-actions">${copyBtn(text)}</div>
+      </div>`;
+    const M = L.MSG;
+    return `
+      <section>
+        <h2 class="sec-title">${icon('note')}Scripts</h2>
+        <div class="muted text-sm mb-4" style="line-height:1.5">Every message template in one place. <b>[owner]</b> and <b>[gym]</b> are filled in automatically when you use the buttons on a lead — copying from here gives the raw template.</div>
+
+        <div class="sub-title">DM 1 — opening question (picked by Current Offer; never a pitch)</div>
+        <div class="grid gap-3 lg:grid-cols-3 items-start mb-6">
+          ${block('Current Offer = Free Trial', L.dm1({ ...ph, 'Current Offer': 'Free Trial' }))}
+          ${block('Current Offer = Paid Intro', L.dm1({ ...ph, 'Current Offer': 'Paid Intro' }))}
+          ${block('Current Offer = None', L.dm1({ ...ph, 'Current Offer': 'None' }))}
+        </div>
+
+        <div class="sub-title">Follow-ups when there's no reply</div>
+        <div class="grid gap-3 lg:grid-cols-3 items-start mb-6">
+          ${L.FOLLOW_UPS.map((f) => block(`Day ${f.day}`, f.text({ 'Owner Name': '[owner]' }))).join('')}
+        </div>
+
+        <div class="sub-title">When they reply — two-step rule: react first, ask about the video in the next message</div>
+        <div class="grid gap-3 lg:grid-cols-2 items-start mb-6">
+          ${block('"Manually / no system" — Step 1 (send now)', M.manualStep1)}
+          ${block('"Manually / no system" — Step 2 (after they respond)', M.manualStep2, 'First place the product name appears')}
+          ${block('Uses Mindbody / Glofox / Wodify — ready message', M.platformQuestion, M.platformInstruction)}
+          ${block('Platform user with NO automatic follow-up', M.platformNoFollowUp)}
+          ${block('Interested after the video — Trial-to-Member System', M.priceFull)}
+          ${block('Interested after the video — Follow-up Add-on', M.priceAddon)}
+          ${block('Went quiet after price (full package)', M.quietFull, 'Only when Status = Price Sent and 3+ days have passed')}
+          ${block('Went quiet after price (Follow-up Add-on)', M.quietAddon)}
+          ${block('Not interested', M.notInterested)}
+        </div>
+
+        <div class="sub-title">Loom video script</div>
+        <div class="card entry">${loomHtml(null)}</div>
+      </section>`;
+  }
+
+  function renderView() {
+    switch (state.tab) {
+      case 'warming': return renderWarming();
+      case 'followups': return renderFollowups();
+      case 'replies': return renderReplies();
+      case 'all': return renderTable();
+      case 'scripts': return renderScripts();
+      default: return renderOverview() + renderDue();
+    }
   }
 
   function render() {
@@ -465,7 +616,20 @@
         : '<div class="space-y-3 mt-5"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton" style="height:8rem"></div></div>');
       return;
     }
-    app.innerHTML = renderHeader() + renderDue() + renderWarming() + renderTable();
+    dueCache = L.dueToday(state.leads, state.activity, today());
+    const c = L.statusCounts(state.leads);
+    const counts = {
+      today: dueCache.warmup.length + dueCache.followups.length + dueCache.price.length,
+      warming: c.Warming, followups: c['DM Sent'], replies: c.Replied + c['Audit Sent'] + c['Price Sent'], all: state.leads.length,
+    };
+    app.innerHTML = renderHeader() + renderTabs(counts) + `<div id="view" class="pt-1">${renderView()}</div>`;
+  }
+
+  function setTab(key, { scroll = true } = {}) {
+    state.tab = TABS.some((tb) => tb.key === key) ? key : 'today';
+    try { history.replaceState(null, '', `#${state.tab}`); } catch { /* ignore */ }
+    render();
+    if (scroll) { const el = document.querySelector('.tabs-wrap'); if (el) window.scrollTo({ top: Math.max(el.offsetTop - 64, 0), behavior: 'smooth' }); }
   }
 
   // ---------------------------------------------------------------- modals
@@ -697,7 +861,15 @@
     markLost: (d) => markLost(d.row),
     copyFollowUp: (d) => copyFollowUp(d.row),
     toggleRow: (d) => { const r = Number(d.row); state.expanded.has(r) ? state.expanded.delete(r) : state.expanded.add(r); render(); },
-    filterStatus: (d) => { state.filters.status = state.filters.status === d.status ? '' : d.status; render(); const el = document.getElementById('leads'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+    setTab: (d) => setTab(d.tab),
+    togglePreview: (d) => { const r = Number(d.row); state.preview.has(r) ? state.preview.delete(r) : state.preview.add(r); render(); },
+    filterStatus: (d) => {
+      // Warming / DM Sent have their own tabs; the other statuses open All leads pre-filtered.
+      if (d.status === 'Warming') return setTab('warming');
+      if (d.status === 'DM Sent') return setTab('followups');
+      state.filters.status = d.status;
+      return setTab('all');
+    },
     toggleSort: () => { state.sortDir = state.sortDir === 'desc' ? 'asc' : 'desc'; render(); },
     openAdd: () => { state.modal = { type: 'add' }; renderModal(); },
     openLoom: () => { state.modal = { type: 'loom' }; renderModal(); },
@@ -742,6 +914,7 @@
 
   document.addEventListener('input', (e) => {
     const t = e.target;
+    if (t.id === 'q') { state.query = t.value; const v = $('#view'); if (v) v.innerHTML = renderView(); return; }
     if (t.form && t.form.id === 'add-form' && t.name !== 'Priority' && t.name !== 'Package') onAddFormEdit(t);
   });
 
@@ -756,6 +929,8 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && today() !== lastDay && !state.modal) { lastDay = today(); load(); }
   });
+
+  window.addEventListener('hashchange', () => { const k = location.hash.replace('#', ''); if (state.loaded && k !== state.tab) setTab(k, { scroll: false }); });
 
   load();
 })();
