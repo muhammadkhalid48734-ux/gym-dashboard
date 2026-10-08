@@ -5,7 +5,10 @@
   else root.Logic = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   const DEADLINE = '2026-11-03';
-  const DAILY_DM_CAP = 20;
+  // Two sending accounts, 10 DMs each per day (20 total).
+  const ACCOUNTS = ['Account 1', 'Account 2'];
+  const ACCOUNT_CAP = 10;
+  const DAILY_DM_CAP = ACCOUNTS.length * ACCOUNT_CAP;
 
   const PKG = { FULL: 'Trial-to-Member System', ADDON: 'Follow-up Add-on', SKIP: 'Skip' };
   const PACKAGE_LABELS = {
@@ -23,6 +26,7 @@
     'Priority': ['High', 'Medium', 'Low'],
     'Status': ['Warming', 'DM Sent', 'Replied', 'Audit Sent', 'Price Sent', 'Closed', 'Lost'],
     'Package': [PKG.FULL, PKG.ADDON, PKG.SKIP],
+    'DM Account': ['Account 1', 'Account 2'],
   };
 
   // ---------- dates (all YYYY-MM-DD, local calendar days) ----------
@@ -317,7 +321,55 @@
     return set.size;
   }
 
+
+  // ---------- two sending accounts ----------
+  const accountOf = (detail) => { const m = /Account\s*(\d)/i.exec(detail || ''); return m ? `Account ${m[1]}` : null; };
+
+  // Distinct leads moved to "DM Sent" today, per account (read from the Activity log; "unassigned" = no account recorded).
+  function dmsByAccountToday(activity, today) {
+    const seen = { 'Account 1': new Set(), 'Account 2': new Set(), unassigned: new Set() };
+    (activity || []).forEach((e) => {
+      if (e.Event !== 'DM Sent' || e.Date !== today) return;
+      const a = accountOf(e.Detail);
+      seen[a && seen[a] ? a : 'unassigned'].add(leadKey(e));
+    });
+    return { 'Account 1': seen['Account 1'].size, 'Account 2': seen['Account 2'].size, unassigned: seen.unassigned.size };
+  }
+
+  // First account that still has room today (Account 1 fills first), or null when both are full.
+  const nextAccount = (counts) => ACCOUNTS.find((a) => counts[a] < ACCOUNT_CAP) || null;
+
+  function warmupInfo(lead, today) {
+    const touches = parseInt(lead['Engagement Touches'], 10) || 0;
+    const days = daysSince(lead['Engagement Started'], today);
+    return { lead, touches, days, ready: touches >= 3 && days !== null && days >= 2 };
+  }
+
+  // Today's DM list: ready leads first (most touches first), the first free slots go to Account 1, the next to Account 2.
+  // Stable while you send: a lead that leaves the list frees a slot in the account that sent it, so nobody else changes account.
+  function buildDmQueue(leads, activity, today, includeNotReady) {
+    const counts = dmsByAccountToday(activity, today);
+    const warming = leads.filter((l) => l.Status === 'Warming').map((l) => warmupInfo(l, today));
+    const pool = warming.filter((x) => includeNotReady || x.ready)
+      .sort((a, b) => (b.ready - a.ready) || (b.touches - a.touches) || (a.lead._row - b.lead._row));
+    const lists = {};
+    let idx = 0;
+    ACCOUNTS.forEach((a) => {
+      const room = Math.max(ACCOUNT_CAP - counts[a], 0);
+      lists[a] = pool.slice(idx, idx + room);
+      idx += room;
+    });
+    return {
+      counts, lists,
+      readyTotal: warming.filter((x) => x.ready).length,
+      notReadyTotal: warming.filter((x) => !x.ready).length,
+      queued: ACCOUNTS.reduce((n, a) => n + lists[a].length, 0),
+      leftover: Math.max(pool.length - idx, 0),
+    };
+  }
+
   return {
+    ACCOUNTS, ACCOUNT_CAP, accountOf, dmsByAccountToday, nextAccount, warmupInfo, buildDmQueue,
     DEADLINE, DAILY_DM_CAP, PKG, PACKAGE_LABELS, ENUMS, MSG, FOLLOW_UPS, LOOM_STEPS, LOOM_RULE, REPLY_OPTIONS,
     todayISO, parseDate, normalizeDate, daysBetween, daysSince, parseFollowers,
     suggestPriority, suggestPackage, effectivePackage, mentionsPlatform,

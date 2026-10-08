@@ -179,3 +179,59 @@ test('nextMessage for "Copy follow-up"', () => {
   assert.match(L.nextMessage(lead({ Status: 'DM Sent', 'Last Contact Date': T }), [], T).label, /Day 3/);
   assert.equal(L.nextMessage(lead({ Status: 'Lost' }), [], T).text, null);
 });
+
+// ---------- two accounts, 10 DMs each ----------
+const warmLeads = (n, over = {}) => Array.from({ length: n }, (_, i) => ({
+  _row: i + 2, 'Gym Name': `G${i}`, City: 'X', Status: 'Warming', 'Engagement Touches': 3, 'Engagement Started': '2026-10-01', ...over,
+}));
+const sentEv = (gym, account, date = T) => ({ Gym: gym, City: 'X', Event: 'DM Sent', Date: date, Detail: `DM 1 · ${account}` });
+const names = (q, a) => q.lists[a].map((x) => x.lead['Gym Name']);
+
+test('DM queue: first 10 ready leads go to Account 1, next 10 to Account 2, rest wait for tomorrow', () => {
+  const q = L.buildDmQueue(warmLeads(25), [], T, false);
+  assert.deepEqual(names(q, 'Account 1'), ['G0', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9']);
+  assert.deepEqual(names(q, 'Account 2'), ['G10', 'G11', 'G12', 'G13', 'G14', 'G15', 'G16', 'G17', 'G18', 'G19']);
+  assert.equal(q.leftover, 5); assert.equal(q.queued, 20);
+  assert.equal(L.DAILY_DM_CAP, 20); assert.equal(L.ACCOUNT_CAP, 10);
+});
+
+test('DM queue: only ready leads (3+ touches AND 2+ days) unless asked to include the rest', () => {
+  const leads = [...warmLeads(2), { _row: 90, 'Gym Name': 'Few touches', Status: 'Warming', 'Engagement Touches': 1, 'Engagement Started': '2026-10-01' },
+    { _row: 91, 'Gym Name': 'Too new', Status: 'Warming', 'Engagement Touches': 5, 'Engagement Started': T }, { _row: 92, 'Gym Name': 'Sent', Status: 'DM Sent', 'Engagement Touches': 9, 'Engagement Started': '2026-10-01' }];
+  const strict = L.buildDmQueue(leads, [], T, false);
+  assert.deepEqual(names(strict, 'Account 1'), ['G0', 'G1']); assert.equal(strict.readyTotal, 2); assert.equal(strict.notReadyTotal, 2);
+  const all = L.buildDmQueue(leads, [], T, true);
+  assert.deepEqual(names(all, 'Account 1'), ['G0', 'G1', 'Too new', 'Few touches']); // ready first, then by touches
+});
+
+test('DM queue: nobody changes account while you send (a sent lead frees a slot in its own account)', () => {
+  const leads = warmLeads(25);
+  const before = L.buildDmQueue(leads, [], T, false);
+  // send G0 from Account 1
+  const after1 = L.buildDmQueue(leads.filter((l) => l['Gym Name'] !== 'G0'), [sentEv('G0', 'Account 1')], T, false);
+  assert.deepEqual(names(after1, 'Account 1'), names(before, 'Account 1').slice(1));
+  assert.deepEqual(names(after1, 'Account 2'), names(before, 'Account 2'));
+  // send G10 from Account 2 as well
+  const after2 = L.buildDmQueue(leads.filter((l) => !['G0', 'G10'].includes(l['Gym Name'])), [sentEv('G0', 'Account 1'), sentEv('G10', 'Account 2')], T, false);
+  assert.deepEqual(names(after2, 'Account 1'), names(before, 'Account 1').slice(1));
+  assert.deepEqual(names(after2, 'Account 2'), names(before, 'Account 2').slice(1));
+  assert.deepEqual(after2.counts, { 'Account 1': 1, 'Account 2': 1, unassigned: 0 });
+});
+
+test('DM queue: once Account 1 has sent 10, everything left goes to Account 2; both full → empty', () => {
+  const sent = Array.from({ length: 10 }, (_, i) => sentEv(`S${i}`, 'Account 1'));
+  const q = L.buildDmQueue(warmLeads(25), sent, T, false);
+  assert.equal(q.lists['Account 1'].length, 0); assert.equal(q.lists['Account 2'].length, 10);
+  assert.equal(L.nextAccount(q.counts), 'Account 2');
+  const full = L.buildDmQueue(warmLeads(25), sent.concat(Array.from({ length: 10 }, (_, i) => sentEv(`T${i}`, 'Account 2'))), T, false);
+  assert.equal(full.queued, 0); assert.equal(L.nextAccount(full.counts), null);
+});
+
+test('per-account counts: today only, distinct leads, legacy sends without an account are "unassigned"', () => {
+  const act = [sentEv('A', 'Account 1'), sentEv('A', 'Account 1'), sentEv('B', 'Account 2'), sentEv('C', 'Account 1', '2026-10-07'),
+    { Gym: 'D', City: 'X', Event: 'DM Sent', Date: T, Detail: 'DM 1' }, { Gym: 'E', City: 'X', Event: 'Replied', Date: T, Detail: '' }];
+  assert.deepEqual(L.dmsByAccountToday(act, T), { 'Account 1': 1, 'Account 2': 1, unassigned: 1 });
+  assert.equal(L.dmsSentToday(act, T), 3);
+  assert.equal(L.nextAccount({ 'Account 1': 9, 'Account 2': 0 }), 'Account 1');
+  assert.equal(L.nextAccount({ 'Account 1': 10, 'Account 2': 3 }), 'Account 2');
+});

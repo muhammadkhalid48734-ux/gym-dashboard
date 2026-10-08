@@ -31,8 +31,8 @@ const { start } = require('./devServer.js');
   let t = await txt();
   assert.match(t, /DMs sent today\s+0 \/ 20/); assert.match(t, /days left until Nov 3, 2026/); step('header: DM counter + deadline');
   const tabNames = await page.locator('.tab').allInnerTexts();
-  assert.deepEqual(tabNames.map((x) => x.replace(/\s+\d+$/, '').trim()), ['Today', 'Warming', 'Follow-ups', 'Replies', 'All leads', 'Scripts']); step('tab menu: Today / Warming / Follow-ups / Replies / All leads / Scripts');
-  assert.match(await page.innerText('[data-tab=warming]'), /2/); assert.match(await page.innerText('[data-tab=followups]'), /2/); assert.match(await page.innerText('[data-tab=replies]'), /1/); assert.match(await page.innerText('[data-tab=all]'), /5/); step('tab counts');
+  assert.deepEqual(tabNames.map((x) => x.replace(/\s+\d+$/, '').trim()), ['Today', 'DM Queue', 'Warming', 'Follow-ups', 'Replies', 'All leads', 'Scripts']); step('tab menu: Today / DM Queue / Warming / Follow-ups / Replies / All leads / Scripts');
+  assert.match(await page.innerText('[data-tab=queue]'), /1/); assert.match(await page.innerText('[data-tab=warming]'), /2/); assert.match(await page.innerText('[data-tab=followups]'), /2/); assert.match(await page.innerText('[data-tab=replies]'), /1/); assert.match(await page.innerText('[data-tab=all]'), /5/); step('tab counts');
 
   // ---- Today (default) with its own sub-tabs
   const sub = page.locator('.subtab');
@@ -78,6 +78,9 @@ const { start } = require('./devServer.js');
   const dmText = await ready.innerText();
   assert.match(dmText, /Hey Sam! Saw Warm Ready's page/); assert.doesNotMatch(dmText, /Trial-to-Member/);
   assert.match(await page.innerText('#dm-counter'), /1 \/ 20/); step('Warming: Send DM 1 → DM Sent, plain text (no product name), counter = 1');
+  assert.equal(rowOf('Warm Ready')[21], 'Account 1');
+  assert.ok(fake.__grids.get('Activity').some((r) => r[2] === 'Warm Ready' && r[4] === 'DM Sent' && /Account 1/.test(r[5])));
+  assert.match(await page.innerText('#dm-counter'), /Account 1\s+1\/10/); assert.match(await page.innerText('#dm-counter'), /Account 2\s+0\/10/); step('Warming: first DM is assigned to Account 1 (Sheet + log + header counters)');
   await page.fill('#q', 'fresh');
   assert.deepEqual(await view.locator('.card .entry-name').allInnerTexts(), ['Warm Fresh']); step('Warming: search filters the list');
   await page.fill('#q', '');
@@ -86,7 +89,7 @@ const { start } = require('./devServer.js');
   // ---- Follow-ups tab
   await tab('followups');
   t = await view.innerText();
-  assert.match(t, /due now/i); assert.match(t, /waiting/i); assert.match(t, /Warm Ready/); assert.match(t, /Next: Day 3 follow-up in 3d/); step('Follow-ups: due now + waiting with next-follow-up countdown');
+  assert.match(t, /due now/i); assert.match(t, /waiting/i); assert.match(t, /Warm Ready/); assert.match(t, /Account 1/); assert.match(t, /Next: Day 3 follow-up in 3d/); step('Follow-ups: due now + waiting with next-follow-up countdown');
 
   // ---- Replies tab
   await tab('replies');
@@ -126,7 +129,7 @@ const { start } = require('./devServer.js');
   assert.equal(rowOf('Warm Ready')[19], 'Follow-up Add-on'); step('Reply handler: platform branch sets Package = Follow-up Add-on');
   await modal.locator('button:text("Close")').click();
   await rowCard('Warm Ready').locator('[data-action=toggleRow]').click();
-  assert.equal((await rowCard('Warm Ready').locator('.lbl').allInnerTexts()).length, 21); step('expanded row shows all 21 fields (incl. Facebook Link)');
+  assert.equal((await rowCard('Warm Ready').locator('.lbl').allInnerTexts()).length, 22); step('expanded row shows all 22 fields (incl. Facebook Link, DM Account)');
   await rowCard('Warm Ready').locator('select[data-field-select=Package]').selectOption('Skip');
   await page.waitForSelector('#toasts :text("Package saved")');
   assert.equal(rowOf('Warm Ready')[19], 'Skip'); step('Package override persisted');
@@ -189,7 +192,7 @@ const { start } = require('./devServer.js');
   await page.click('.topbar [data-action=openTest]');
   await page.waitForSelector('text=All good — read and write both work.'); step('Test Sheet button');
   await modal.locator('button:text("Close")').click();
-  for (const k of ['today', 'warming', 'followups', 'replies', 'all', 'scripts']) {
+  for (const k of ['today', 'queue', 'warming', 'followups', 'replies', 'all', 'scripts']) {
     await tab(k);
     const sw = await page.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(sw <= 392, `horizontal overflow on ${k}: ${sw}`);
@@ -202,6 +205,48 @@ const { start } = require('./devServer.js');
   await page.click('.topbar [data-action=refresh]');
   await page.waitForSelector('#dm-counter:has-text("20 / 20")');
   assert.match(await txt(), /Daily cap reached/); step('cap warning at 20');
+  // ---- DM Queue: 25 ready leads split 10 / 10 across the two accounts
+  {
+    const q = await start(0, { seedQueue: 25 });
+    const qp = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+    if (process.env.TW_CSS) {
+      const css = require('node:fs').readFileSync(process.env.TW_CSS, 'utf8');
+      await qp.route('**/cdn.tailwindcss.com/**', (r) => r.fulfill({ contentType: 'text/javascript', body: `const s=document.createElement('style');s.textContent=${JSON.stringify(css)};document.head.appendChild(s);` }));
+    }
+    await qp.goto(`http://localhost:${q.port}/#queue`);
+    await qp.waitForSelector('[data-tab=queue].on');
+    const panels = qp.locator('.qpanel');
+    assert.equal(await panels.count(), 2);
+    const nm = async (i) => (await panels.nth(i).locator('.entry-name').allInnerTexts());
+    const a1 = await nm(0); const a2 = await nm(1);
+    assert.equal(a1.length, 10); assert.equal(a2.length, 10);
+    assert.equal(a1[0], 'Queue 01'); assert.equal(a1[9], 'Queue 10'); assert.equal(a2[0], 'Queue 11'); assert.equal(a2[9], 'Queue 20');
+    assert.match(await qp.innerText('#view'), /5 more waiting for tomorrow/); step('DM Queue: first 10 → Account 1, next 10 → Account 2, 5 wait for tomorrow');
+    assert.equal(await panels.nth(0).locator('a.pill-link').count(), 20); step('DM Queue: Instagram + Facebook buttons on every entry');
+    await panels.nth(0).locator('.card', { hasText: 'Queue 01' }).locator('button:text("Mark sent")').click();
+    await qp.waitForSelector('#toasts :text("sent from Account 1")');
+    const g = q.fake.__grids.get('Leads');
+    assert.equal(g.find((r) => r[0] === 'Queue 01')[21], 'Account 1'); assert.equal(g.find((r) => r[0] === 'Queue 01')[14], 'DM Sent');
+    assert.deepEqual(await nm(0), a1.slice(1)); assert.deepEqual(await nm(1), a2); step('DM Queue: sending from Account 1 shifts only that list; Account 2 is untouched');
+    await panels.nth(1).locator('.card', { hasText: 'Queue 11' }).locator('button:text("Mark sent")').click();
+    await qp.waitForSelector('#toasts :text("sent from Account 2")');
+    assert.equal(g.find((r) => r[0] === 'Queue 11')[21], 'Account 2');
+    assert.deepEqual(await nm(1), a2.slice(1));
+    let hc = await qp.innerText('#dm-counter');
+    assert.match(hc, /2 \/ 20/); assert.match(hc, /Account 1\s+1\/10/); assert.match(hc, /Account 2\s+1\/10/); step('Header counters: 2 / 20 with Account 1 1/10 and Account 2 1/10');
+    for (let i = 0; i < 9; i++) { // finish Account 1's ten
+      await panels.nth(0).locator('button:text("Mark sent")').first().click();
+      await qp.waitForFunction((n) => document.querySelectorAll('.qpanel')[0].querySelectorAll('.card.entry').length === n, 8 - i);
+    }
+    await qp.waitForFunction(() => /Account 1 is done for today/.test(document.querySelector('#view').innerText));
+    assert.equal((await nm(0)).length, 0); assert.equal((await nm(1)).length, 9); step('DM Queue: Account 1 done at 10/10 → its list is replaced by "done for today"; Account 2 keeps its list');
+    hc = await qp.innerText('#dm-counter');
+    assert.match(hc, /Account 1\s+10\/10/);
+    await qp.click('[data-tab=followups]');
+    assert.match(await qp.innerText('#view'), /Account 1/); step('Follow-ups show which account sent DM 1');
+    await qp.close(); q.server.close();
+  }
+
   // ---- desktop width: tabs must be visible AND clickable (real hit-testing), search box beside them
   const dctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const dp = await dctx.newPage();
@@ -212,12 +257,12 @@ const { start } = require('./devServer.js');
   await dp.goto(`http://localhost:${port}/`);
   await dp.waitForSelector('.tabs', { state: 'attached' });
   assert.ok((await dp.locator('.tabs').boundingBox()).width > 400, 'tab bar collapsed on desktop');
-  for (const k of ['warming', 'followups', 'replies', 'all', 'scripts', 'today']) {
+  for (const k of ['queue', 'warming', 'followups', 'replies', 'all', 'scripts', 'today']) {
     await dp.click(`[data-tab=${k}]`); // fails if something covers the tab
     await dp.waitForSelector(`[data-tab=${k}].on`);
   }
   await dp.click('[data-tab=all]');
-  assert.ok((await dp.locator('#q').boundingBox()).width > 150); step('desktop 1280px: tabs clickable, search box beside them');
+  assert.ok((await dp.locator('#q').boundingBox()).width > 150); step('desktop 1280px: tabs clickable, search box under them');
   await dctx.close();
   assert.deepEqual(errs, [], 'console errors: ' + errs.join(' | '));
   await browser.close(); server.close();

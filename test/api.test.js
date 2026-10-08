@@ -81,7 +81,8 @@ test('first run: empty Leads tab gets the 20-column header; Activity tab is crea
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.leads, []);
   assert.deepEqual(fake.__grids.get('Leads')[0], HEADERS);
-  assert.equal(HEADERS.length, 21);
+  assert.equal(HEADERS.length, 22);
+  assert.equal(HEADERS[21], 'DM Account');
   assert.equal(HEADERS[19], 'Package');
   assert.equal(HEADERS[20], 'Facebook Link');
   assert.deepEqual(fake.__grids.get('Activity')[0], ACTIVITY_HEADERS);
@@ -97,7 +98,7 @@ test('existing 19-column sheet gets the missing Package + Facebook Link headers 
   assert.equal(fake.__grids.get('Leads')[1][0], 'Old Gym');
 });
 
-test('existing 20-column sheet (Package already present) only gets the Facebook Link header', async () => {
+test('existing 20-column sheet (Package already present) gets the Facebook Link + DM Account headers', async () => {
   const fake = fresh();
   fake.__grids.get('Leads')[0] = HEADERS.slice(0, 20);
   fake.__grids.get('Leads')[1] = ['Old Gym', 'Dallas'];

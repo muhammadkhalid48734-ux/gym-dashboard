@@ -48,6 +48,7 @@ The bar under the header switches between views. The badge on each tab is a live
 | Tab | What's in it |
 |---|---|
 | **Today** | Everything due right now, split into three sub-tabs: **Warm-up** (touches), **Follow-ups** (Day 3 / 6 / 10, or Mark Lost after Day 10) and **Price sent** (quiet for 3+ days). Each entry has the message, a big **Copy** button and **Mark Sent**. |
+| **DM Queue** | Today's DMs split over your two accounts: the first 10 ready leads are for **Account 1**, the next 10 for **Account 2**. Each entry has the DM text, Instagram/Facebook buttons, **Copy** and **Mark sent · Account N**. When an account reaches 10/10 its list is replaced by "done for today". Tick *Include leads that aren't ready yet* to fill slots with leads still warming. |
 | **Warming** | Leads you're engaging with before any DM. **+1 Touch** counts a real comment; **Preview DM 1** shows the opening message without changing anything; **Send DM 1** sets Status = DM Sent. "Ready for DM 1" appears at 3+ touches and 2+ days. |
 | **Follow-ups** | Everyone whose DM 1 went out with no reply: due ones on top, the rest with a "next follow-up in N days" countdown. |
 | **Replies** | Replied / Audit Sent / Price Sent leads. **Log Reply** gives the next message to send. |
@@ -58,13 +59,13 @@ The search box (right of the tabs) filters by gym, city, owner or notes. The DM 
 
 ## How it works
 
-**Sheet tab `Leads`** — 21 columns, in order: Gym Name, City, Instagram Link, Followers, Last Post Date, Owner Name, Website Link, Website Quality, Bio Link Type, Has Booking Form, Has Follow-up Automation, Current Offer, Problem, Priority, Status, Last Contact Date, Notes, Engagement Started, Engagement Touches, **Package** (`Trial-to-Member System` | `Follow-up Add-on` | `Skip`), **Facebook Link** (column U, added last so older sheets just get one more header; shown as a Facebook button beside the Instagram one). Dates are stored as `YYYY-MM-DD` text. Edit cells in the Sheet freely, then hit **Refresh**; don't insert/delete/sort rows while the page is open (a write to a row that no longer matches is refused and nothing is written).
+**Sheet tab `Leads`** — 21 columns, in order: Gym Name, City, Instagram Link, Followers, Last Post Date, Owner Name, Website Link, Website Quality, Bio Link Type, Has Booking Form, Has Follow-up Automation, Current Offer, Problem, Priority, Status, Last Contact Date, Notes, Engagement Started, Engagement Touches, **Package** (`Trial-to-Member System` | `Follow-up Add-on` | `Skip`), **Facebook Link** (column U, shown as a Facebook button beside the Instagram one) and **DM Account** (column V: which of your two accounts sent DM 1 — follow-ups show "Send from Account N"). New columns go last, so older sheets just get extra headers. Dates are stored as `YYYY-MM-DD` text. Edit cells in the Sheet freely, then hit **Refresh**; don't insert/delete/sort rows while the page is open (a write to a row that no longer matches is refused and nothing is written).
 
 **Sheet tab `Activity`** — an append-only log (Timestamp, Date, Gym, City, Event, Detail). The app needs it for two things the 20 columns can't express: the exact **"DMs sent today"** count (a lead DM'd and replied-to on the same day still counts) and **which follow-up stage** (Day 3/6/10) a lead is on — follow-ups are timed from DM 1, not from the last follow-up. If you set a lead to `DM Sent` by hand in the Sheet, the app falls back to its Last Contact date. Don't delete this tab.
 
 **Package** is auto-filled when adding a lead (None/Outdated site → Trial-to-Member System; Modern + booking form + no follow-up → Follow-up Add-on; Modern + Mindbody/Glofox/Wodify in notes → Skip) and can be overridden on the form or later in the expanded row. The reply handler uses it to pick the price message. DM 1 never mentions a product.
 
-**Daily cap**: 20 DMs/day. The header turns amber at 17, red at 20, and "Send DM 1" asks for confirmation once you're at 20.
+**Daily cap**: 10 DMs per account, 20 a day. The header shows both accounts (6/10, 0/10); the total turns amber at 17 and red at 20, and sending past an account's 10 asks for confirmation.
 
 ## Tests
 ```bash

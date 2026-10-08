@@ -11,6 +11,7 @@
     expanded: new Set(),             // sheet rows with details open
     justSent: new Set(),             // rows whose DM 1 was just marked sent (keep the text + Copy visible)
     tab: (location.hash || '').replace('#', '') || 'today',
+    queueAll: false,                 // DM Queue: also list leads that aren't ready yet
     dueTab: null,                    // Today sub-tab: 'warmup' | 'followups' | 'price' (null = first non-empty)
     query: '',                       // search box text
     preview: new Set(),              // warming rows with the DM 1 preview open (status unchanged)
@@ -184,13 +185,17 @@
     await writeLead(lead, { 'Engagement Touches': n, 'Last Contact Date': today() }, [], `Touch #${n} saved ✓`);
   }
 
-  async function sendDm1(row) {
+  async function sendDm1(row, account) {
     const lead = findLead(row);
-    const sent = L.dmsSentToday(state.activity, today());
-    if (sent >= L.DAILY_DM_CAP && !confirm(`You've already sent ${sent} DMs today (cap ${L.DAILY_DM_CAP} on a new account). Send another anyway?`)) return;
+    const counts = L.dmsByAccountToday(state.activity, today());
+    const total = L.dmsSentToday(state.activity, today());
+    let acct = account || L.nextAccount(counts);
+    const full = !acct || counts[acct] >= L.ACCOUNT_CAP;
+    if ((full || total >= L.DAILY_DM_CAP) && !confirm(`${acct && counts[acct] >= L.ACCOUNT_CAP ? acct : 'Both accounts'} already sent ${L.ACCOUNT_CAP} DMs today (daily cap ${L.DAILY_DM_CAP}). Send another anyway?`)) return;
+    if (!acct) acct = L.ACCOUNTS.reduce((best, a) => (counts[a] < counts[best] ? a : best), L.ACCOUNTS[0]);
     state.justSent.add(lead._row); // keep the card (with the DM text) visible after the status flips
-    const ok = await writeLead(lead, { Status: 'DM Sent', 'Last Contact Date': today() },
-      [{ date: today(), event: 'DM Sent', detail: 'DM 1' }], 'DM 1 → status set to DM Sent ✓');
+    const ok = await writeLead(lead, { Status: 'DM Sent', 'Last Contact Date': today(), 'DM Account': acct },
+      [{ date: today(), event: 'DM Sent', detail: `DM 1 · ${acct}` }], `DM 1 sent from ${acct} → status set to DM Sent ✓`);
     if (!ok) { state.justSent.delete(lead._row); render(); }
   }
 
@@ -238,6 +243,7 @@
   // ---------------------------------------------------------------- rendering: header + status strip
   const TABS = [
     { key: 'today', label: 'Today', icon: 'bell' },
+    { key: 'queue', label: 'DM Queue', icon: 'send' },
     { key: 'warming', label: 'Warming', icon: 'flame' },
     { key: 'followups', label: 'Follow-ups', icon: 'send' },
     { key: 'replies', label: 'Replies', icon: 'msg' },
@@ -256,6 +262,7 @@
   function renderHeader() {
     const t = today();
     const sent = L.dmsSentToday(state.activity, t);
+    const byAcct = L.dmsByAccountToday(state.activity, t);
     const cap = L.DAILY_DM_CAP;
     const daysLeft = L.daysBetween(t, L.DEADLINE);
     const capTone = sent >= cap ? 'kpi-danger' : sent >= cap - 3 ? 'kpi-warn' : 'kpi-ok';
@@ -280,6 +287,9 @@
           <div class="flex items-baseline gap-2"><span class="strip-num num">${sent}<span class="kpi-of"> / ${cap}</span></span>
             <span class="strip-sub">${sent >= cap ? 'cap reached — stop for today' : `${cap - sent} left`}</span></div>
           <div class="bar"><i style="width:${pct}%"></i></div>
+          <div class="accts">
+            ${L.ACCOUNTS.map((a) => { const n = byAcct[a]; return `<div class="acct ${n >= L.ACCOUNT_CAP ? 'full' : ''}"><div class="acct-top"><span>${a}</span><b class="num">${n}/${L.ACCOUNT_CAP}</b></div><div class="mini"><i style="width:${Math.min(100, (n / L.ACCOUNT_CAP) * 100)}%"></i></div></div>`; }).join('')}
+          </div>
         </div>
         <div class="card strip-dl kpi-hero"><span class="strip-num num">${dlValue}</span><span class="strip-sub" style="color:rgba(255,255,255,.85)">${esc(dlText)}</span></div>
       </div>
@@ -293,7 +303,7 @@
         <div class="tabs" role="tablist">
           ${TABS.map((tb) => `<button type="button" role="tab" class="tab ${state.tab === tb.key ? 'on' : ''}" aria-selected="${state.tab === tb.key}" data-action="setTab" data-tab="${tb.key}">${icon(tb.icon)}<span>${tb.label}</span>${counts[tb.key] !== undefined ? `<span class="count ${tb.key === 'today' && counts.today ? 'count-alert' : ''}">${counts[tb.key]}</span>` : ''}</button>`).join('')}
         </div>
-        <input id="q" class="field search ${SEARCH_TABS.includes(state.tab) ? '' : 'hidden md:block md:invisible'}" type="search" placeholder="Search gym, city, owner…" value="${esc(state.query)}" autocomplete="off" aria-label="Search leads">
+         ${SEARCH_TABS.includes(state.tab) ? `<input id="q" class="field search" type="search" placeholder="Search gym, city, owner…" value="${esc(state.query)}" autocomplete="off" aria-label="Search leads">` : ''}
       </nav>`;
   }
 
@@ -347,14 +357,16 @@
     '<div class="muted text-sm mt-3" style="line-height:1.45">Leave a <b style="color:var(--text)">real comment</b> on a recent post — something specific, not an emoji — then log it.</div>',
     btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok'));
 
+  const acctChip = (lead) => (lead['DM Account'] ? chip(`Send from ${lead['DM Account']}`, 'violet') : '');
+
   function followupEntry(it) {
     const lead = it.lead;
     if (it.type === 'lost') {
-      return dueEntry(lead, chip(`Day ${it.daysSinceDm} · no reply`, 'red'),
+      return dueEntry(lead, chip(`Day ${it.daysSinceDm} · no reply`, 'red') + acctChip(lead),
         it.text ? `<div class="msg-label">Day 10 message not sent yet</div><div class="msg">${esc(it.text)}</div>` : '<div class="muted text-sm mt-3">All follow-ups sent, still no reply.</div>',
         `${it.text ? copyBtn(it.text) : ''}${btn('Mark Lost', 'markLost', { row: lead._row }, 'btn-danger')}`);
     }
-    return dueEntry(lead, chip(`Day ${it.day} follow-up`, 'blue'),
+    return dueEntry(lead, chip(`Day ${it.day} follow-up`, 'blue') + acctChip(lead),
       `<div class="msg">${esc(it.text)}</div>`,
       `${copyBtn(it.text)}${btn('Mark Sent', 'markFollowUp', { row: lead._row }, 'btn-ok', 'send')}`);
   }
@@ -411,6 +423,7 @@
       return { touches, days, ready: touches >= 3 && days !== null && days >= 2 };
     };
     warming.sort((a, b) => (info(b).ready - info(a).ready) || (info(b).touches - info(a).touches));
+    const nextAcct = L.nextAccount(L.dmsByAccountToday(state.activity, today()));
     const readyCount = warming.filter((l) => info(l).ready && !state.justSent.has(l._row)).length;
     const cards = warming.map((lead) => {
       const { touches, days, ready } = info(lead);
@@ -437,7 +450,7 @@
           <div class="entry-actions">
             ${sent
               ? `${copyBtn(dm)}${btn('Done', 'dismissSent', { row: lead._row })}`
-              : `${showDm ? copyBtn(dm) : ''}${btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok')}${btn('Send DM 1', 'sendDm1', { row: lead._row }, ready ? 'btn-primary' : '', 'send')}${showDm ? btn('Hide', 'togglePreview', { row: lead._row }, 'btn-sm') : btn('Preview DM 1', 'togglePreview', { row: lead._row }, '', 'note')}`}
+              : `${showDm ? copyBtn(dm) : ''}${btn('+1 Touch', 'touch', { row: lead._row }, 'btn-ok')}${btn(`Send DM 1${nextAcct ? ` · ${nextAcct}` : ''}`, 'sendDm1', { row: lead._row }, ready ? 'btn-primary' : '', 'send')}${showDm ? btn('Hide', 'togglePreview', { row: lead._row }, 'btn-sm') : btn('Preview DM 1', 'togglePreview', { row: lead._row }, '', 'note')}`}
           </div>
         </div>`;
     });
@@ -452,7 +465,7 @@
   // ---------------------------------------------------------------- rendering: lead rows (Follow-ups / Replies / All leads)
   const FIELDS = ['Gym Name', 'City', 'Instagram Link', 'Facebook Link', 'Followers', 'Last Post Date', 'Owner Name', 'Website Link', 'Website Quality', 'Bio Link Type',
     'Has Booking Form', 'Has Follow-up Automation', 'Current Offer', 'Problem', 'Priority', 'Status', 'Last Contact Date', 'Notes',
-    'Engagement Started', 'Engagement Touches', 'Package'];
+    'Engagement Started', 'Engagement Touches', 'Package', 'DM Account'];
 
   const lastContactMs = (l) => L.parseDate(l['Last Contact Date']);
   function sortByLastContact(list) {
@@ -474,7 +487,7 @@
 
   function detailValue(lead, field) {
     const v = lead[field];
-    if (field === 'Priority' || field === 'Package') {
+    if (field === 'Priority' || field === 'Package' || field === 'DM Account') {
       const opts = ['', ...L.ENUMS[field]];
       return `<select class="field" data-field-select="${field}" data-row="${lead._row}">${opts.map((o) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o || '—')}</option>`).join('')}</select>`;
     }
@@ -491,7 +504,7 @@
           ${avatar(lead)}
           <div class="flex-1 min-w-0">
             <div class="entry-name">${esc(lead['Gym Name'])}${lead.City ? ` <span class="muted" style="font-weight:500;font-size:.75rem">· ${esc(lead.City)}</span>` : ''}</div>
-            <div class="entry-tags" style="margin-top:.4rem">${statusChip(lead.Status)}${chip(lead.Priority && `${lead.Priority} priority`, PRIORITY_TONE[lead.Priority])}${chip(pkg, PKG_TONE[pkg])}${extra}</div>
+            <div class="entry-tags" style="margin-top:.4rem">${statusChip(lead.Status)}${chip(lead.Priority && `${lead.Priority} priority`, PRIORITY_TONE[lead.Priority])}${chip(pkg, PKG_TONE[pkg])}${chip(lead['DM Account'], 'violet')}${extra}</div>
           </div>
           <div class="last-contact shrink-0">Last contact<b>${esc(ago(lead['Last Contact Date']))}</b></div>
           <span class="chev ${open ? 'open' : ''}">${icon('chev')}</span>
@@ -619,8 +632,63 @@
       </section>`;
   }
 
+  // ---------------------------------------------------------------- rendering: DM Queue tab (today's 20 DMs split over 2 accounts)
+  function renderQueue() {
+    const t = today();
+    const q = L.buildDmQueue(state.leads, state.activity, t, state.queueAll);
+    const cap = L.ACCOUNT_CAP;
+    const sentNames = Object.fromEntries(L.ACCOUNTS.map((a) => [a, []]));
+    const seen = new Set();
+    state.activity.forEach((e) => {
+      if (e.Event !== 'DM Sent' || e.Date !== t) return;
+      const a = L.accountOf(e.Detail);
+      const k = `${L.leadKey(e)}|${a}`;
+      if (a && sentNames[a] && !seen.has(k)) { seen.add(k); sentNames[a].push(e.Gym); }
+    });
+    const entry = (x, acct) => {
+      const lead = x.lead;
+      const dm = L.dm1(lead);
+      const tag = x.ready ? '<span class="chip chip-solid-ok">Ready for DM 1</span>'
+        : chip(`Not ready: ${plural(x.touches, 'touch', 'touches')}${x.days === null ? '' : ` · day ${x.days}`}`, 'amber');
+      return dueEntry(lead, tag, `<div class="msg">${esc(dm)}</div>`,
+        `${copyBtn(dm)}${btn(`Mark sent · ${acct}`, 'sendDm1', { row: lead._row, account: acct }, 'btn-ok', 'send')}`);
+    };
+    const panel = (a) => {
+      const n = q.counts[a];
+      const room = Math.max(cap - n, 0);
+      const list = q.lists[a];
+      return `
+        <div class="qpanel">
+          <div class="card qhead ${n >= cap ? 'kpi-ok' : ''}">
+            <div class="flex items-baseline justify-between gap-2"><span class="font-extrabold" style="font-size:1.05rem">${a}</span><span class="strip-sub num"><b style="color:var(--text)">${n}</b> / ${cap} sent today</span></div>
+            <div class="bar"><i style="width:${Math.min(100, (n / cap) * 100)}%"></i></div>
+            ${sentNames[a].length ? `<div class="entry-tags">${sentNames[a].map((g) => chip(`✓ ${g}`, 'green')).join('')}</div>` : ''}
+          </div>
+          <div class="space-y-2.5 mt-2.5">
+            ${list.map((x) => entry(x, a)).join('')
+              || `<div class="empty">${icon(n >= cap ? 'check' : 'info')}${n >= cap ? `${a} is done for today (${cap}/${cap})` : 'No ready leads left for this account'}</div>`}
+            ${list.length && list.length < room ? `<div class="muted text-xs px-1">${room - list.length} slot${room - list.length === 1 ? '' : 's'} still free — no more leads ready.</div>` : ''}
+          </div>
+        </div>`;
+    };
+    const total = L.dmsSentToday(state.activity, t);
+    return `
+      <section>
+        <h2 class="sec-title">${icon('send')}DM Queue <span class="count ${q.queued ? 'count-alert' : 'count-ok'}">${q.queued}</span></h2>
+        <div class="muted text-sm mb-3" style="line-height:1.5">Today's ${L.DAILY_DM_CAP} DMs: the first ${cap} go out from <b>Account 1</b>, the next ${cap} from <b>Account 2</b>.
+          Copy the message, send it on Instagram or Facebook from that account, then tap <b>Mark sent</b>. A lead is ready after 3 touches and 2 days.</div>
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          ${chip(`${q.readyTotal} ready`, 'green', true)}${chip(`${q.notReadyTotal} still warming`, 'amber', true)}${q.leftover ? chip(`${q.leftover} more waiting for tomorrow`, 'gray', true) : ''}
+          ${btn(state.queueAll ? 'Hide leads that aren\'t ready' : 'Include leads that aren\'t ready yet', 'toggleQueueAll', {}, 'btn-sm')}
+        </div>
+        ${total >= L.DAILY_DM_CAP ? `<div class="alert alert-danger mb-4">${icon('alert')}<div>Both accounts are at ${cap}/${cap} — you're done with DMs for today.</div></div>` : ''}
+        <div class="grid gap-5 lg:grid-cols-2 items-start">${L.ACCOUNTS.map(panel).join('')}</div>
+      </section>`;
+  }
+
   function renderView() {
     switch (state.tab) {
+      case 'queue': return renderQueue();
       case 'warming': return renderWarming();
       case 'followups': return renderFollowups();
       case 'replies': return renderReplies();
@@ -642,6 +710,7 @@
     const c = L.statusCounts(state.leads);
     const counts = {
       today: dueCache.warmup.length + dueCache.followups.length + dueCache.price.length,
+      queue: L.buildDmQueue(state.leads, state.activity, today(), state.queueAll).queued,
       warming: c.Warming, followups: c['DM Sent'], replies: c.Replied + c['Audit Sent'] + c['Price Sent'], all: state.leads.length,
     };
     app.innerHTML = renderHeader() + renderTabs(counts) + `<div id="view" class="pt-1">${renderView()}</div>`;
@@ -886,7 +955,8 @@
     copy: (d) => copyText(d.text),
     refresh: () => load(),
     touch: (d) => touch(d.row),
-    sendDm1: (d) => sendDm1(d.row),
+    sendDm1: (d) => sendDm1(d.row, d.account),
+    toggleQueueAll: () => { state.queueAll = !state.queueAll; render(); },
     dismissSent: (d) => { state.justSent.delete(Number(d.row)); render(); },
     markFollowUp: (d) => markFollowUp(d.row),
     markPriceFollowUp: (d) => markPriceFollowUp(d.row),
