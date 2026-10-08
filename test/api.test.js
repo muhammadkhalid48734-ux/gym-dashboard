@@ -24,7 +24,7 @@ function call(handler, method, body) {
 const sample = (over = {}) => ({
   'Gym Name': 'Iron Haven', City: 'Austin', 'Instagram Link': 'https://instagram.com/ironhaven',
   Followers: 4200, 'Website Quality': 'Outdated', 'Current Offer': 'Free Trial', Status: 'Warming',
-  'Engagement Started': '2026-10-08', 'Engagement Touches': 0, Package: 'Trial-to-Member System', ...over,
+  'Engagement Started': '2026-10-08', 'Engagement Touches': 0, Package: 'Trial-to-Member System', 'Facebook Link': 'https://facebook.com/ironhaven', ...over,
 });
 
 function fresh(opts) {
@@ -81,18 +81,31 @@ test('first run: empty Leads tab gets the 20-column header; Activity tab is crea
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.leads, []);
   assert.deepEqual(fake.__grids.get('Leads')[0], HEADERS);
-  assert.equal(HEADERS.length, 20);
+  assert.equal(HEADERS.length, 21);
   assert.equal(HEADERS[19], 'Package');
+  assert.equal(HEADERS[20], 'Facebook Link');
   assert.deepEqual(fake.__grids.get('Activity')[0], ACTIVITY_HEADERS);
 });
 
-test('existing 19-column sheet gets the Package header added without touching data', async () => {
+test('existing 19-column sheet gets the missing Package + Facebook Link headers added without touching data', async () => {
   const fake = fresh();
   fake.__grids.get('Leads')[0] = HEADERS.slice(0, 19);
   fake.__grids.get('Leads')[1] = ['Old Gym', 'Dallas'];
   await call(leadsHandler, 'GET');
   assert.equal(fake.__grids.get('Leads')[0][19], 'Package');
+  assert.equal(fake.__grids.get('Leads')[0][20], 'Facebook Link');
   assert.equal(fake.__grids.get('Leads')[1][0], 'Old Gym');
+});
+
+test('existing 20-column sheet (Package already present) only gets the Facebook Link header', async () => {
+  const fake = fresh();
+  fake.__grids.get('Leads')[0] = HEADERS.slice(0, 20);
+  fake.__grids.get('Leads')[1] = ['Old Gym', 'Dallas'];
+  const r = await call(leadsHandler, 'GET');
+  assert.equal(r.status, 200);
+  assert.deepEqual(fake.__grids.get('Leads')[0], HEADERS);
+  assert.deepEqual(r.json.warnings, []);
+  assert.equal(r.json.leads[0]['Facebook Link'], '');
 });
 
 test('POST appends a row in column order and returns its row number', async () => {
@@ -106,10 +119,12 @@ test('POST appends a row in column order and returns its row number', async () =
   assert.equal(row[0], 'Iron Haven');
   assert.equal(row[3], 4200);
   assert.equal(row[19], 'Trial-to-Member System');
+  assert.equal(row[20], 'https://facebook.com/ironhaven');
   const list = await call(leadsHandler, 'GET');
   assert.equal(list.json.leads.length, 2);
   assert.equal(list.json.leads[1]._row, 3);
   assert.equal(list.json.leads[0].Package, 'Trial-to-Member System');
+  assert.equal(list.json.leads[0]['Facebook Link'], 'https://facebook.com/ironhaven');
 });
 
 test('POST rejects missing gym name and invalid enum values', async () => {

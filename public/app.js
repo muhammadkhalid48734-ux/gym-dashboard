@@ -71,6 +71,11 @@
     if (!url) return '<span class="faint text-xs">no IG link</span>';
     return `<a href="${esc(url)}" target="_blank" rel="noopener" class="pill-link">Instagram ${icon('ext')}</a>`;
   }
+  function fbLink(lead) {
+    const url = lead['Facebook Link'];
+    return url ? `<a href="${esc(url)}" target="_blank" rel="noopener" class="pill-link fb">Facebook ${icon('ext')}</a>` : '';
+  }
+  const socialLinks = (lead) => igLink(lead) + fbLink(lead); // Instagram + Facebook buttons side by side
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const ago = (date) => {
     const d = L.daysSince(date, today());
@@ -328,7 +333,7 @@
           ${avatar(lead)}
           <div class="min-w-0 flex-1">
             <div class="entry-name">${esc(lead['Gym Name'])}</div>
-            <div class="entry-meta">${lead.City ? `<span>${esc(lead.City)}</span>` : ''}${igLink(lead)}</div>
+            <div class="entry-meta">${lead.City ? `<span>${esc(lead.City)}</span>` : ''}${socialLinks(lead)}</div>
           </div>
         </div>
         ${tag ? `<div class="entry-tags">${tag}</div>` : ''}
@@ -422,7 +427,7 @@
             ${avatar(lead)}
             <div class="min-w-0 flex-1">
               <div class="entry-name">${esc(lead['Gym Name'])}</div>
-              <div class="entry-meta">${lead.City ? `<span>${esc(lead.City)}</span>` : ''}${igLink(lead)}</div>
+              <div class="entry-meta">${lead.City ? `<span>${esc(lead.City)}</span>` : ''}${socialLinks(lead)}</div>
             </div>
           </div>
           ${sent || ready ? `<div class="entry-tags">${sent ? chip('DM 1 sent', 'blue', true) : '<span class="chip chip-solid-ok">Ready for DM 1</span>'}</div>` : ''}
@@ -445,7 +450,7 @@
   }
 
   // ---------------------------------------------------------------- rendering: lead rows (Follow-ups / Replies / All leads)
-  const FIELDS = ['Gym Name', 'City', 'Instagram Link', 'Followers', 'Last Post Date', 'Owner Name', 'Website Link', 'Website Quality', 'Bio Link Type',
+  const FIELDS = ['Gym Name', 'City', 'Instagram Link', 'Facebook Link', 'Followers', 'Last Post Date', 'Owner Name', 'Website Link', 'Website Quality', 'Bio Link Type',
     'Has Booking Form', 'Has Follow-up Automation', 'Current Offer', 'Problem', 'Priority', 'Status', 'Last Contact Date', 'Notes',
     'Engagement Started', 'Engagement Touches', 'Package'];
 
@@ -473,7 +478,7 @@
       const opts = ['', ...L.ENUMS[field]];
       return `<select class="field" data-field-select="${field}" data-row="${lead._row}">${opts.map((o) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o || '—')}</option>`).join('')}</select>`;
     }
-    if ((field === 'Instagram Link' || field === 'Website Link') && v) return `<a href="${esc(v)}" target="_blank" rel="noopener" class="break-all" style="color:var(--accent);text-decoration:underline">${esc(v)}</a>`;
+    if ((field === 'Instagram Link' || field === 'Facebook Link' || field === 'Website Link') && v) return `<a href="${esc(v)}" target="_blank" rel="noopener" class="break-all" style="color:var(--accent);text-decoration:underline">${esc(v)}</a>`;
     return `<span class="break-words whitespace-pre-wrap">${esc(v) || '<span class="faint">—</span>'}</span>`;
   }
 
@@ -698,6 +703,7 @@
         ${fld('Gym Name *', inp('Gym Name', 'text', 'required'))}
         ${fld('City', inp('City'))}
         ${fld('Instagram Link (or @handle)', inp('Instagram Link', 'text', 'inputmode="url"'))}
+        ${fld('Facebook Link (or page name)', inp('Facebook Link', 'text', 'inputmode="url"'))}
         ${fld('Followers', inp('Followers', 'text', 'inputmode="numeric" placeholder="e.g. 4200 or 4.2k"'), 'col-span-1')}
         ${fld('Last Post Date', inp('Last Post Date', 'date'), 'col-span-1')}
         ${fld('Owner Name', inp('Owner Name'))}
@@ -756,6 +762,14 @@
     return `https://instagram.com/${v.replace(/^@/, '')}`;
   }
 
+  function normalizeFb(v) {
+    v = (v || '').trim();
+    if (!v) return '';
+    if (/^https?:\/\//i.test(v)) return v;
+    if (/facebook\.com|fb\.com/i.test(v)) return `https://${v.replace(/^\/+/, '')}`;
+    return `https://facebook.com/${v.replace(/^@/, '')}`;
+  }
+
   async function submitAdd() {
     const form = $('#add-form');
     if (!form.reportValidity()) return;
@@ -763,6 +777,7 @@
     const f = readForm();
     const lead = { ...f };
     lead['Instagram Link'] = normalizeIg(f['Instagram Link']);
+    lead['Facebook Link'] = normalizeFb(f['Facebook Link']);
     const fol = L.parseFollowers(f.Followers);
     lead.Followers = f.Followers && fol === null ? f.Followers : fol === null ? '' : fol;
     if (f.Followers && fol === null) { toast('Followers must be a number (e.g. 4200 or 4.2k)', 'warn'); return; }

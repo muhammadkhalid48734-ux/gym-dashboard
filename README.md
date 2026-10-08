@@ -6,7 +6,7 @@ Internal, single-user tool for selling the **Trial-to-Member System** ($500) and
 
 ### 1. Google Sheet
 1. Create a new Google Sheet. Copy its **ID** from the URL: `https://docs.google.com/spreadsheets/d/<THIS_PART>/edit`.
-2. Leave it empty. On first load the app creates the tabs **Leads** and **Activity** and writes the header rows itself (if you already have a `Leads` tab with the 19 original columns, it just adds the `Package` header in column T).
+2. Leave it empty. On first load the app creates the tabs **Leads** and **Activity** and writes the header rows itself (if you already have a `Leads` tab with 19 or 20 of the columns, it just adds the missing headers at the end — Package in T, Facebook Link in U).
 
 ### 2. Service account
 1. [console.cloud.google.com](https://console.cloud.google.com) → create/select a project.
@@ -58,7 +58,7 @@ The search box (right of the tabs) filters by gym, city, owner or notes. The DM 
 
 ## How it works
 
-**Sheet tab `Leads`** — 20 columns, in order: Gym Name, City, Instagram Link, Followers, Last Post Date, Owner Name, Website Link, Website Quality, Bio Link Type, Has Booking Form, Has Follow-up Automation, Current Offer, Problem, Priority, Status, Last Contact Date, Notes, Engagement Started, Engagement Touches, **Package** (`Trial-to-Member System` | `Follow-up Add-on` | `Skip`). Dates are stored as `YYYY-MM-DD` text. Edit cells in the Sheet freely, then hit **Refresh**; don't insert/delete/sort rows while the page is open (a write to a row that no longer matches is refused and nothing is written).
+**Sheet tab `Leads`** — 21 columns, in order: Gym Name, City, Instagram Link, Followers, Last Post Date, Owner Name, Website Link, Website Quality, Bio Link Type, Has Booking Form, Has Follow-up Automation, Current Offer, Problem, Priority, Status, Last Contact Date, Notes, Engagement Started, Engagement Touches, **Package** (`Trial-to-Member System` | `Follow-up Add-on` | `Skip`), **Facebook Link** (column U, added last so older sheets just get one more header; shown as a Facebook button beside the Instagram one). Dates are stored as `YYYY-MM-DD` text. Edit cells in the Sheet freely, then hit **Refresh**; don't insert/delete/sort rows while the page is open (a write to a row that no longer matches is refused and nothing is written).
 
 **Sheet tab `Activity`** — an append-only log (Timestamp, Date, Gym, City, Event, Detail). The app needs it for two things the 20 columns can't express: the exact **"DMs sent today"** count (a lead DM'd and replied-to on the same day still counts) and **which follow-up stage** (Day 3/6/10) a lead is on — follow-ups are timed from DM 1, not from the last follow-up. If you set a lead to `DM Sent` by hand in the Sheet, the app falls back to its Last Contact date. Don't delete this tab.
 

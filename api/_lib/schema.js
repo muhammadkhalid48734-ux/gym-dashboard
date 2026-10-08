@@ -8,7 +8,7 @@ const HEADERS = [
   'Gym Name', 'City', 'Instagram Link', 'Followers', 'Last Post Date', 'Owner Name',
   'Website Link', 'Website Quality', 'Bio Link Type', 'Has Booking Form',
   'Has Follow-up Automation', 'Current Offer', 'Problem', 'Priority', 'Status',
-  'Last Contact Date', 'Notes', 'Engagement Started', 'Engagement Touches', 'Package',
+  'Last Contact Date', 'Notes', 'Engagement Started', 'Engagement Touches', 'Package', 'Facebook Link',
 ];
 
 const ACTIVITY_HEADERS = ['Timestamp', 'Date', 'Gym', 'City', 'Event', 'Detail'];
@@ -31,6 +31,6 @@ function colLetter(i) {
   return String.fromCharCode(65 + i);
 }
 
-const LAST_COL = colLetter(HEADERS.length - 1); // T
+const LAST_COL = colLetter(HEADERS.length - 1); // U
 
 module.exports = { LEADS_TAB, ACTIVITY_TAB, HEADERS, ACTIVITY_HEADERS, ENUMS, NUMERIC, colLetter, LAST_COL };

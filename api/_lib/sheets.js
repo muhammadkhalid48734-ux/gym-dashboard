@@ -115,13 +115,17 @@ function ensureSetup() {
       });
       actions.push('Wrote Leads header row');
     } else {
-      const first19Match = HEADERS.slice(0, 19).every((h, i) => String(row[i] || '').trim() === h);
-      if (first19Match && isBlank(row[19])) {
+      // Header row present: if it is a correct prefix of the expected one (an older 19/20-column sheet),
+      // append just the missing headers. Existing data is never touched.
+      const filled = row.filter((c) => !isBlank(c)).length;
+      const prefixOk = HEADERS.slice(0, filled).every((h, i) => String(row[i] || '').trim() === h);
+      if (prefixOk && filled < HEADERS.length) {
+        const missing = HEADERS.slice(filled);
         await s.spreadsheets.values.update({
-          spreadsheetId: id, range: `${LEADS_TAB}!${LAST_COL}1`, valueInputOption: 'RAW',
-          requestBody: { values: [['Package']] },
+          spreadsheetId: id, range: `${LEADS_TAB}!${colLetter(filled)}1:${LAST_COL}1`, valueInputOption: 'RAW',
+          requestBody: { values: [missing] },
         });
-        actions.push('Added "Package" column header (column T) to existing Leads sheet');
+        actions.push(`Added missing column header(s) to Leads: ${missing.join(', ')}`);
       } else {
         const bad = HEADERS.filter((h, i) => String(row[i] || '').trim() !== h);
         if (bad.length) warnings.push(`Leads header row doesn't match the expected columns (${bad.join(', ')}). Reads/writes assume the documented column order.`);

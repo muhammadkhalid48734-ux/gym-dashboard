@@ -24,8 +24,9 @@ function seed(fake) {
   const row = (o) => HEADERS.map((h) => (o[h] === undefined ? '' : o[h]));
   const base = { City: 'Austin', 'Owner Name': 'Sam', Followers: 4200, 'Website Quality': 'Outdated', 'Has Booking Form': 'Yes',
     'Has Follow-up Automation': 'No', 'Current Offer': 'Free Trial', Priority: 'High', 'Instagram Link': 'https://instagram.com/x' };
+  base['Facebook Link'] = '';
   const add = (o) => fake.__grids.get('Leads').push(row({ ...base, ...o }));
-  add({ 'Gym Name': 'Warm Ready', Status: 'Warming', 'Engagement Started': daysAgo(3), 'Engagement Touches': 3, 'Last Contact Date': daysAgo(1), Package: 'Trial-to-Member System' });
+  add({ 'Gym Name': 'Warm Ready', 'Facebook Link': 'https://facebook.com/warmready', Status: 'Warming', 'Engagement Started': daysAgo(3), 'Engagement Touches': 3, 'Last Contact Date': daysAgo(1), Package: 'Trial-to-Member System' });
   add({ 'Gym Name': 'Warm Fresh', City: 'Dallas', Status: 'Warming', 'Engagement Started': daysAgo(0), 'Engagement Touches': 1, 'Last Contact Date': L.todayISO(), Package: 'Trial-to-Member System' });
   add({ 'Gym Name': 'Day3 Gym', Status: 'DM Sent', 'Last Contact Date': daysAgo(3), 'Website Quality': 'Modern', Package: 'Follow-up Add-on' });
   add({ 'Gym Name': 'Price Quiet', City: 'Dallas', Status: 'Price Sent', 'Last Contact Date': daysAgo(4), Package: 'Follow-up Add-on', 'Website Quality': 'Modern' });
