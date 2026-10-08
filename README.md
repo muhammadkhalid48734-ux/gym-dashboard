@@ -57,6 +57,22 @@ The bar under the header switches between views. The badge on each tab is a live
 
 The search box (right of the tabs) filters by gym, city, owner or notes. The DM counter and deadline stay visible on every tab.
 
+## Small things that save time
+- **Undo:** after +1 Touch, Send DM 1, Mark sent, Mark Lost or Log Reply, the toast has an **Undo** button (8 seconds). It restores the Sheet cells and cancels the log rows, so the DM counter and follow-up stage roll back too.
+- **Copy** turns into "Copied" on the button itself, so you can see it worked even if you miss the toast.
+- **Show more:** long lists load 12 cards or 20 rows at a time.
+- **Keyboard:** `/` jumps to search, `Esc` closes a dialog, `Enter` opens a lead row, `Tab` stays inside dialogs.
+- **Add another:** the toast after adding a lead has an "Add another" button.
+
+## Design notes
+Internal work tool, so the look is calm and dense: neutral zinc surfaces, **one** accent (emerald), blue and orange used only to tell Account 1 from Account 2, one radius scale (6px tags, 8px controls, 12px containers), no gradients, no glow, no decorative dots. Light and dark follow the phone or computer setting; both are tested. Text is Geist and Geist Mono, self-hosted in `public/fonts` (no Google Fonts request). Icons are Phosphor (regular weight), generated into `public/icons.js`.
+
+Change an icon or update the fonts:
+```bash
+npm install
+npm run build:assets      # copies the fonts, regenerates public/icons.js from the icon list in scripts/build-assets.js
+```
+
 ## How it works
 
 **Sheet tab `Leads`** — 21 columns, in order: Gym Name, City, Instagram Link, Followers, Last Post Date, Owner Name, Website Link, Website Quality, Bio Link Type, Has Booking Form, Has Follow-up Automation, Current Offer, Problem, Priority, Status, Last Contact Date, Notes, Engagement Started, Engagement Touches, **Package** (`Trial-to-Member System` | `Follow-up Add-on` | `Skip`), **Facebook Link** (column U, shown as a Facebook button beside the Instagram one) and **DM Account** (column V: which of your two accounts the lead belongs to and sends from — `Account 1` or `Account 2`, filled in blocks of 10 in Sheet order: rows 1-10 → Account 1, 11-20 → Account 2, 21-30 → Account 1 …; a lead added later continues the pattern; change it any time in the lead's detail). Every card shows it as a coloured flag at the top. New columns go last, so older sheets just get extra headers. Dates are stored as `YYYY-MM-DD` text. Edit cells in the Sheet freely, then hit **Refresh**; don't insert/delete/sort rows while the page is open (a write to a row that no longer matches is refused and nothing is written).
@@ -69,7 +85,13 @@ The search box (right of the tabs) filters by gym, city, owner or notes. The DM 
 
 ## Tests
 ```bash
-npm test                      # templates, rules, due-today logic, API + Sheet layer (in-memory fake Sheet)
-node test/ui-smoke.js         # optional: drives the real UI in Chromium (needs playwright-core)
+npm test                      # templates, rules, due-today and queue logic, API + Sheet layer (in-memory fake Sheet)
 ```
-`npm test` can't talk to real Google — use **Test Sheet** after deploying for that.
+Browser checks need Chromium and `playwright-core` (`npm i -D playwright-core` or point `CHROMIUM_PATH` at an installed Chrome):
+```bash
+node test/ui-smoke.js         # drives the real UI: every tab, the reply handler, add lead, the 10/10 DM queue
+node test/ui-audit.js         # design rules as checks: no em dashes in UI copy, contrast >= 4.5 in light AND dark,
+                              # one radius scale, no wrapping buttons, undo, focus handling, reduced motion
+```
+If the Tailwind CDN is unreachable (CI or a sandbox), set `TW_CSS=/path/to/built.css` to inject equivalent styles.
+`npm test` can't talk to real Google. Use **Test Sheet** after deploying for that.

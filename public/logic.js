@@ -129,7 +129,7 @@
     priceAddon: 'The Follow-up Add-on is $300 one-time — it hooks into your existing booking form and handles the confirmation, the reminder, and the follow-ups after. 50% to start, 50% when it\'s live. Want to get started?',
     quietFull: "If $500 isn't right for now, I can also do a smaller scope for less — let me know if that works better.",
     // The Add-on is already the smaller scope, so the "$500 / smaller scope" wording would be wrong for it.
-    quietAddon: "If $300 isn't right for now, no worries — let me know and I'm happy to chat it through.",
+    quietAddon: "If $300 isn't right for now, no worries. Let me know and I'm happy to chat it through.",
     notInterested: 'Totally understand, appreciate you replying! If that ever changes, feel free to reach out.',
   };
 
@@ -144,7 +144,9 @@
     { n: 4, name: 'Value', secs: 15, text: '"At your follower count, even a 1% trial-booking rate is [X] leads — one member is worth $600+/year."' },
     { n: 5, name: 'CTA', secs: 10, text: '"If the Trial-to-Member System looks useful, reply and I\'ll walk you through pricing."' },
   ];
-  const LOOM_RULE = 'Never mention price in the video. Aim for 1.5–2 min, face on camera.';
+  // Your exact wording for the reminder shown in the Warming panel.
+  const WARMUP_REMINDER = 'Real comments only — something specific about the post, not an emoji.';
+  const LOOM_RULE = 'Never mention price in the video. Aim for 1.5-2 min, face on camera.';
 
   // Same steps with [X] filled from the lead's follower count (1% of followers).
   function loomStepsFor(lead) {
@@ -153,6 +155,20 @@
   }
 
   // ---------- activity-derived state ----------
+  // Undo support: an "Undo" row cancels the latest in-effect event of that name for the same lead.
+  // Everything that reads the log (DM counters, follow-up stage, price follow-up) works on the cleaned list.
+  function cleanActivity(activity) {
+    const out = [];
+    (activity || []).forEach((e) => {
+      if (e.Event !== 'Undo') { out.push(e); return; }
+      const key = leadKey(e);
+      for (let i = out.length - 1; i >= 0; i--) {
+        if (leadKey(out[i]) === key && out[i].Event === e.Detail) { out.splice(i, 1); break; }
+      }
+    });
+    return out;
+  }
+
   const leadKey = (l) => `${(l['Gym Name'] || l.Gym || '').trim()}|${(l.City || '').trim()}`.toLowerCase();
   const eventsFor = (activity, lead) => (activity || []).filter((e) => leadKey(e) === leadKey(lead));
 
@@ -180,7 +196,7 @@
     if (st === 'Warming') return { label: 'DM 1', text: dm1(lead) };
     if (st === 'DM Sent') {
       const s = dmState(lead, activity, today);
-      if (s.followUpsSent >= FOLLOW_UPS.length) return { label: null, text: null, reason: 'All 3 follow-ups already sent — mark Lost if there is still no reply.' };
+      if (s.followUpsSent >= FOLLOW_UPS.length) return { label: null, text: null, reason: 'All 3 follow-ups already sent. Mark Lost if there is still no reply.' };
       const f = FOLLOW_UPS[s.followUpsSent];
       return { label: `Day ${f.day} follow-up`, text: f.text(lead) };
     }
@@ -231,8 +247,8 @@
     { key: 'platformNo', label: 'Platform user: NO automatic follow-up', indent: true },
     { key: 'platformYes', label: 'Platform user: already has automatic follow-up (exit)', indent: true },
     { key: 'video', label: 'Said yes, send the video' },
-    { key: 'priceFull', label: 'Interested after the video — Trial-to-Member System ($500)' },
-    { key: 'priceAddon', label: 'Interested after the video — Follow-up Add-on ($300)' },
+    { key: 'priceFull', label: 'Interested after the video: Trial-to-Member System ($500)' },
+    { key: 'priceAddon', label: 'Interested after the video: Follow-up Add-on ($300)' },
     { key: 'quiet', label: 'Went quiet after price' },
     { key: 'no', label: 'Not interested' },
   ];
@@ -251,8 +267,8 @@
     switch (key) {
       case 'manual':
         return { ...base,
-          messages: [{ label: 'Step 1 — send now', text: MSG.manualStep1 }],
-          laterMessage: { label: 'Step 2 — send AFTER they respond', text: MSG.manualStep2 },
+          messages: [{ label: 'Step 1: send now', text: MSG.manualStep1 }],
+          laterMessage: { label: 'Step 2: send AFTER they respond', text: MSG.manualStep2 },
           setStatus: 'Replied' };
       case 'platform':
         return { ...base,
@@ -272,11 +288,11 @@
         return { ...base, loom: true, setStatus: 'Audit Sent' };
       case 'priceFull':
         return { ...base,
-          messages: [{ label: 'Price — Trial-to-Member System', text: MSG.priceFull }],
+          messages: [{ label: 'Price: Trial-to-Member System', text: MSG.priceFull }],
           setStatus: 'Price Sent', setPackage: PKG.FULL };
       case 'priceAddon':
         return { ...base,
-          messages: [{ label: 'Price — Follow-up Add-on', text: MSG.priceAddon }],
+          messages: [{ label: 'Price: Follow-up Add-on', text: MSG.priceAddon }],
           setStatus: 'Price Sent', setPackage: PKG.ADDON };
       case 'quiet':
         return { ...base,
@@ -391,7 +407,7 @@
   }
 
   return {
-    ACCOUNTS, ACCOUNT_CAP, accountOf, dmsByAccountToday, nextAccount, warmupInfo, blockAccount, nextNewLeadAccount, buildDmQueue,
+    WARMUP_REMINDER, cleanActivity, ACCOUNTS, ACCOUNT_CAP, accountOf, dmsByAccountToday, nextAccount, warmupInfo, blockAccount, nextNewLeadAccount, buildDmQueue,
     DEADLINE, DAILY_DM_CAP, PKG, PACKAGE_LABELS, ENUMS, MSG, FOLLOW_UPS, LOOM_STEPS, LOOM_RULE, REPLY_OPTIONS,
     todayISO, parseDate, normalizeDate, daysBetween, daysSince, parseFollowers,
     suggestPriority, suggestPackage, effectivePackage, mentionsPlatform,

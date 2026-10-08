@@ -66,10 +66,10 @@ function start(port = Number(process.env.PORT) || 3000, opts = {}) {
       res.statusCode = 404; return res.end('{}');
     }
     const file = path.join(__dirname, '..', 'public', url.pathname === '/' ? 'index.html' : url.pathname);
-    fs.readFile(file, (err, data) => {
+    fs.readFile(file, (err, data) => { // (binary-safe: no encoding)
       if (err) { res.statusCode = 404; return res.end('not found'); }
       const ext = path.extname(file);
-      res.setHeader('Content-Type', { '.html': 'text/html', '.js': 'text/javascript' }[ext] || 'text/plain');
+      res.setHeader('Content-Type', { '.html': 'text/html', '.js': 'text/javascript', '.woff2': 'font/woff2', '.txt': 'text/plain' }[ext] || 'application/octet-stream');
       res.end(data);
     });
   });

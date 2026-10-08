@@ -25,7 +25,7 @@ const { start } = require('./devServer.js');
   const grid = () => fake.__grids.get('Leads');
   const rowOf = (name) => grid().find((r) => r[0] === name);
   const view = page.locator('#view');
-  const rowCard = (name) => page.locator('.lead-list > .card', { hasText: name });
+  const rowCard = (name) => page.locator('.lead-list > .row', { hasText: name });
 
   // ---- header + tabs
   let t = await txt();
@@ -64,8 +64,8 @@ const { start } = require('./devServer.js');
   assert.match(t, /Real comments only — something specific about the post, not an emoji\./); assert.match(t, /Ready for DM 1/); assert.match(t, /only 1 touch so far/); step('Warming: reminder, ready badge, soft warning');
   const ready = view.locator('.card', { hasText: 'Warm Ready' });
   assert.equal(await ready.locator('a.pill-link').count(), 2);
-  assert.equal(await ready.locator('a.pill-link.fb').getAttribute('href'), 'https://facebook.com/warmready');
-  assert.equal(await view.locator('.card', { hasText: 'Warm Fresh' }).locator('a.pill-link.fb').count(), 0); step('Warming: Instagram + Facebook buttons side by side (Facebook only when a link exists)');
+  assert.equal(await ready.locator('a.pill-link', { hasText: 'Facebook' }).getAttribute('href'), 'https://facebook.com/warmready');
+  assert.equal(await view.locator('.card', { hasText: 'Warm Fresh' }).locator('a.pill-link', { hasText: 'Facebook' }).count(), 0); step('Warming: Instagram + Facebook buttons side by side (Facebook only when a link exists)');
   const fresh = view.locator('.card', { hasText: 'Warm Fresh' });
   assert.ok((await view.locator('.card .entry-name').allInnerTexts())[0] === 'Warm Ready'); step('Warming: ready leads listed first');
   assert.match(await ready.locator('.acct-flag').innerText(), /Account 1/); assert.match(await view.locator('.card', { hasText: 'Warm Fresh' }).locator('.acct-flag').innerText(), /Account 2/);
@@ -92,12 +92,12 @@ const { start } = require('./devServer.js');
   // ---- Follow-ups tab
   await tab('followups');
   t = await view.innerText();
-  assert.match(t, /due now/i); assert.match(t, /waiting/i); assert.match(t, /Warm Ready/); assert.match(t, /Account 1/); assert.match(t, /Next: Day 3 follow-up in 3d/); step('Follow-ups: due now + waiting with next-follow-up countdown');
+  assert.match(t, /due now/i); assert.match(t, /waiting/i); assert.match(t, /Warm Ready/); assert.match(t, /Account 1/); assert.match(t, /Day 3 follow-up in 3d/); step('Follow-ups: due now + waiting with next-follow-up countdown');
 
   // ---- Replies tab
   await tab('replies');
   t = await view.innerText();
-  assert.match(t, /Price Quiet/); assert.match(t, /Quiet 3\+ days/); step('Replies: price-sent lead shown with quiet flag');
+  assert.match(t, /Price Quiet/); assert.match(t, /Quiet for 3\+ days/); step('Replies: price-sent lead shown with quiet flag');
   await rowCard('Price Quiet').locator('button:text("Log Reply")').click();
   const modal = page.locator('[role=dialog]');
   await modal.locator('button', { hasText: 'Manually / no system' }).click();
@@ -105,11 +105,11 @@ const { start } = require('./devServer.js');
   assert.match(m, /Oh interesting/); assert.doesNotMatch(m, /Trial-to-Member System — mind if I send/); step('Reply handler: manual step 1 only');
   await modal.locator('button:text("Show Step 2")').click();
   assert.match(await modal.innerText(), /I built something for this called the Trial-to-Member System — mind if I send a 2-min video showing how it works\?/); step('Reply handler: step 2 with product name');
-  await modal.locator('button', { hasText: 'Interested after the video — Follow-up Add-on' }).click();
+  await modal.locator('button', { hasText: 'Interested after the video: Follow-up Add-on' }).click();
   m = await modal.innerText();
-  assert.match(m, /The Follow-up Add-on is \$300 one-time/); assert.match(m, /matches package/);
+  assert.match(m, /The Follow-up Add-on is \$300 one-time/); assert.match(m, /matches the package/);
   await modal.locator('[data-action=applyReply]').click();
-  await page.waitForSelector('#toasts :text("Status → Price Sent")');
+  await page.waitForSelector('#toasts :text("Status set to Price Sent")');
   assert.equal(rowOf('Price Quiet')[14], 'Price Sent'); assert.equal(rowOf('Price Quiet')[19], 'Follow-up Add-on'); step('Reply handler: add-on price → Price Sent');
   await modal.locator('button:text("Close")').click();
 
@@ -128,7 +128,7 @@ const { start } = require('./devServer.js');
   await modal.locator('button', { hasText: 'NO automatic follow-up' }).click();
   assert.match(await modal.innerText(), /I have a Follow-up Add-on that plugs into what you already use/);
   await modal.locator('[data-action=applyReply]').click();
-  await page.waitForSelector('#toasts :text("Status → Replied")');
+  await page.waitForSelector('#toasts :text("Status set to Replied")');
   assert.equal(rowOf('Warm Ready')[19], 'Follow-up Add-on'); step('Reply handler: platform branch sets Package = Follow-up Add-on');
   await modal.locator('button:text("Close")').click();
   await rowCard('Warm Ready').locator('[data-action=toggleRow]').click();
@@ -142,7 +142,7 @@ const { start } = require('./devServer.js');
   await page.waitForSelector('#toasts :text("Notes saved")');
   assert.equal(rowOf('Warm Fresh')[16], 'uses Glofox for booking'); step('Edit Notes persisted');
   await page.selectOption('[data-filter=city]', 'Dallas');
-  const names = await page.locator('.lead-list > .card .entry-name').allInnerTexts();
+  const names = await page.locator('.lead-list > .row .entry-name').allInnerTexts();
   assert.ok(names.length && names.every((n) => /Warm Fresh|Price Quiet/.test(n)), names.join('|')); step('city filter');
   await page.selectOption('[data-filter=city]', '');
   await rowCard('Warm Fresh').locator('button:text("Copy follow-up")').click();
@@ -190,11 +190,9 @@ const { start } = require('./devServer.js');
   assert.equal(nr[2], 'https://instagram.com/brandnew'); assert.equal(nr[20], 'https://facebook.com/brandnewfitness'); assert.equal(nr[21], 'Account 1'); assert.equal(nr[3], 12500); assert.equal(nr[14], 'Warming'); assert.equal(nr[17], today); assert.equal(nr[18], 0); assert.equal(nr[19], 'Follow-up Add-on'); step('lead appended: Warming, started today, touches 0, Package saved');
 
   // ---- misc
-  await page.click('.topbar [data-action=openLoom]');
-  assert.match(await modal.innerText(), /If the Trial-to-Member System looks useful, reply and I'll walk you through pricing\./); step('Loom panel');
-  await modal.locator('button:text("Close")').click();
+  assert.equal(await page.locator('.topbar [data-action=openLoom]').isVisible(), false); step('phone: Loom button is hidden to save room (the script lives in the Scripts tab)');
   await page.click('.topbar [data-action=openTest]');
-  await page.waitForSelector('text=All good — read and write both work.'); step('Test Sheet button');
+  await page.waitForSelector('text=All good: read and write both work.'); step('Test Sheet button');
   await modal.locator('button:text("Close")').click();
   for (const k of ['today', 'queue', 'warming', 'followups', 'replies', 'all', 'scripts']) {
     await tab(k);
@@ -225,7 +223,7 @@ const { start } = require('./devServer.js');
     const a1 = await nm(0); const a2 = await nm(1);
     assert.equal(a1.length, 10); assert.equal(a2.length, 10);
     assert.equal(a1[0], 'Queue 01'); assert.equal(a1[9], 'Queue 10'); assert.equal(a2[0], 'Queue 11'); assert.equal(a2[9], 'Queue 20');
-    assert.match(await qp.innerText('#view'), /5 more waiting for tomorrow/); step('DM Queue: first 10 → Account 1, next 10 → Account 2, 5 wait for tomorrow');
+    assert.match(await qp.innerText('#view'), /5 more wait for tomorrow/); step('DM Queue: first 10 → Account 1, next 10 → Account 2, 5 wait for tomorrow');
     assert.equal(await panels.nth(0).locator('a.pill-link').count(), 20); step('DM Queue: Instagram + Facebook buttons on every entry');
     await panels.nth(0).locator('.card', { hasText: 'Queue 01' }).locator('button:text("Mark sent")').click();
     await qp.waitForSelector('#toasts :text("sent from Account 1")');
@@ -240,7 +238,7 @@ const { start } = require('./devServer.js');
     assert.match(hc, /2 \/ 20/); assert.match(hc, /Account 1\s+1\/10/); assert.match(hc, /Account 2\s+1\/10/); step('Header counters: 2 / 20 with Account 1 1/10 and Account 2 1/10');
     for (let i = 0; i < 9; i++) { // finish Account 1's ten
       await panels.nth(0).locator('button:text("Mark sent")').first().click();
-      await qp.waitForFunction((n) => document.querySelectorAll('.qpanel')[0].querySelectorAll('.card.entry').length === n, 8 - i);
+      await qp.waitForFunction((n) => document.querySelectorAll('.qpanel')[0].querySelectorAll('.entry-name').length === n, 8 - i);
     }
     await qp.waitForFunction(() => /Account 1 is done for today/.test(document.querySelector('#view').innerText));
     assert.equal((await nm(0)).length, 0); assert.equal((await nm(1)).length, 9); step('DM Queue: Account 1 done at 10/10 → its list is replaced by "done for today"; Account 2 keeps its list');
@@ -261,10 +259,12 @@ const { start } = require('./devServer.js');
     const nm = async (i) => (await panels.nth(i).locator('.entry-name').allInnerTexts());
     const a1 = await nm(0); const a2 = await nm(1);
     assert.equal(a1[0], 'Queue 01'); assert.equal(a1[9], 'Queue 10'); assert.equal(a2[0], 'Queue 11'); assert.equal(a2[9], 'Queue 20');
-    assert.match(await qp.innerText('#view'), /10 more waiting for tomorrow/); step('DM Queue (assigned): Queue 01-10 → Account 1, 11-20 → Account 2, 21-30 wait for tomorrow');
+    assert.match(await qp.innerText('#view'), /10 more wait for tomorrow/); step('DM Queue (assigned): Queue 01-10 → Account 1, 11-20 → Account 2, 21-30 wait for tomorrow');
     assert.equal(await panels.nth(0).locator('.acct-flag.a1').count(), 10); assert.equal(await panels.nth(1).locator('.acct-flag.a2').count(), 10); step('DM Queue: every card carries its account flag');
     await qp.click('[data-tab=all]');
-    assert.equal(await qp.locator('.lead-list > .card.acct-1').count(), 20); assert.equal(await qp.locator('.lead-list > .card.acct-2').count(), 10); step('All leads: rows show their account too');
+    assert.equal(await qp.locator('.lead-list > .row').count(), 20); assert.equal(await qp.locator('.lead-list > .row.acct-1').count(), 10); assert.equal(await qp.locator('.lead-list > .row.acct-2').count(), 10); step('All leads: rows show their account; first page is 20 rows');
+    await qp.click('[data-action=showMore][data-key=all]');
+    assert.equal(await qp.locator('.lead-list > .row').count(), 30); assert.equal(await qp.locator('[data-action=showMore]').count(), 0); step('All leads: "Show more" reveals the rest (30 rows) and then goes away');
     await qp.close(); q.server.close();
   }
 
@@ -282,6 +282,9 @@ const { start } = require('./devServer.js');
     await dp.click(`[data-tab=${k}]`); // fails if something covers the tab
     await dp.waitForSelector(`[data-tab=${k}].on`);
   }
+  await dp.click('.topbar [data-action=openLoom]');
+  assert.match(await dp.innerText('.sheet'), /If the Trial-to-Member System looks useful, reply and I'll walk you through pricing\./); step('desktop: Loom script modal');
+  await dp.keyboard.press('Escape');
   await dp.click('[data-tab=all]');
   assert.ok((await dp.locator('#q').boundingBox()).width > 150); step('desktop 1280px: tabs clickable, search box under them');
   await dctx.close();

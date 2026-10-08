@@ -8,9 +8,14 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "dev:mock": "node test/devServer.js"
+    "dev:mock": "node test/devServer.js",
+    "build:assets": "node scripts/build-assets.js"
   },
   "dependencies": {
     "googleapis": "^184.0.0"
+  },
+  "devDependencies": {
+    "@phosphor-icons/core": "^2.1.1",
+    "geist": "^1.7.2"
   }
 }
