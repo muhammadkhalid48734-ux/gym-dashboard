@@ -34,20 +34,28 @@ const { start } = require('./devServer.js');
   assert.deepEqual(tabNames.map((x) => x.replace(/\s+\d+$/, '').trim()), ['Today', 'Warming', 'Follow-ups', 'Replies', 'All leads', 'Scripts']); step('tab menu: Today / Warming / Follow-ups / Replies / All leads / Scripts');
   assert.match(await page.innerText('[data-tab=warming]'), /2/); assert.match(await page.innerText('[data-tab=followups]'), /2/); assert.match(await page.innerText('[data-tab=replies]'), /1/); assert.match(await page.innerText('[data-tab=all]'), /5/); step('tab counts');
 
-  // ---- Today (default)
-  assert.match(await view.innerText(), /Hey Sam, just floating this back up/); step('Today: Day 3 follow-up due');
-  assert.match(await view.innerText(), /If \$300 isn't right for now/); step('Today: add-on price-quiet wording');
-  assert.match(await view.innerText(), /Mark Lost/); step('Today: 11+ day lead shows Mark Lost');
+  // ---- Today (default) with its own sub-tabs
+  const sub = page.locator('.subtab');
+  assert.deepEqual((await sub.allInnerTexts()).map((x) => x.replace(/\s+/g, ' ').trim()), ['Warm-up 1', 'Follow-ups 2', 'Price sent 1']); step('Today: sub-tabs Warm-up / Follow-ups / Price sent with counts');
+  assert.match(await page.getAttribute('[data-dtab=warmup]', 'class'), /\bon\b/);
+  let tv = await view.innerText();
+  assert.match(tv, /Warm Ready/); assert.doesNotMatch(tv, /Day3 Gym/); assert.doesNotMatch(tv, /Price Quiet/); step('Today: default sub-tab shows only warm-up leads');
+  await page.click('[data-dtab=followups]'); await page.waitForSelector('[data-dtab=followups].on');
+  tv = await view.innerText();
+  assert.match(tv, /Hey Sam, just floating this back up/); assert.doesNotMatch(tv, /Warm Ready/); step('Today › Follow-ups: Day 3 follow-up due (other groups hidden)');
+  assert.match(tv, /Mark Lost/); step('Today › Follow-ups: 11+ day lead shows Mark Lost');
   await page.locator('[data-action=copy]').first().click();
   await page.waitForSelector('#toasts :text("Copied")'); step('copy toast');
-  const due = view;
-  await due.locator('.card', { hasText: 'Day3 Gym' }).locator('button:text("Mark Sent")').click();
+  await view.locator('.card', { hasText: 'Day3 Gym' }).locator('button:text("Mark Sent")').click();
   await page.waitForSelector('#toasts :text("Day 3 follow-up marked sent")');
   assert.ok(fake.__grids.get('Activity').some((r) => r[2] === 'Day3 Gym' && r[4] === 'Follow-up'));
-  assert.doesNotMatch(await due.innerText(), /Day3 Gym/); step('Today: Mark Sent persists + logs');
-  await due.locator('.card', { hasText: 'Old Silent' }).locator('button:text("Mark Lost")').click();
+  assert.doesNotMatch(await view.innerText(), /Day3 Gym/); step('Today › Follow-ups: Mark Sent persists + logs');
+  assert.match(await page.getAttribute('[data-dtab=followups]', 'class'), /\bon\b/); step('Today: stays on the Follow-ups sub-tab after an action');
+  await view.locator('.card', { hasText: 'Old Silent' }).locator('button:text("Mark Lost")').click();
   await page.waitForSelector('#toasts :text("Marked Lost")');
-  assert.equal(rowOf('Old Silent')[14], 'Lost'); step('Today: Mark Lost');
+  assert.equal(rowOf('Old Silent')[14], 'Lost'); step('Today › Follow-ups: Mark Lost');
+  await page.click('[data-dtab=price]'); await page.waitForSelector('[data-dtab=price].on');
+  assert.match(await view.innerText(), /If \$300 isn't right for now/); step('Today › Price sent: add-on quiet wording');
 
   // ---- Warming tab
   await tab('warming');

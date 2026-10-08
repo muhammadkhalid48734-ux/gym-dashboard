@@ -47,7 +47,7 @@ The bar under the header switches between views. The badge on each tab is a live
 
 | Tab | What's in it |
 |---|---|
-| **Today** | Everything due right now: warm-up touches, follow-ups (Day 3 / 6 / 10, or Mark Lost after Day 10), and price-sent leads quiet for 3+ days. Each has the message, a big **Copy** button and **Mark Sent**. |
+| **Today** | Everything due right now, split into three sub-tabs: **Warm-up** (touches), **Follow-ups** (Day 3 / 6 / 10, or Mark Lost after Day 10) and **Price sent** (quiet for 3+ days). Each entry has the message, a big **Copy** button and **Mark Sent**. |
 | **Warming** | Leads you're engaging with before any DM. **+1 Touch** counts a real comment; **Preview DM 1** shows the opening message without changing anything; **Send DM 1** sets Status = DM Sent. "Ready for DM 1" appears at 3+ touches and 2+ days. |
 | **Follow-ups** | Everyone whose DM 1 went out with no reply: due ones on top, the rest with a "next follow-up in N days" countdown. |
 | **Replies** | Replied / Audit Sent / Price Sent leads. **Log Reply** gives the next message to send. |

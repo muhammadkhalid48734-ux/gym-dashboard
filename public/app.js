@@ -11,6 +11,7 @@
     expanded: new Set(),             // sheet rows with details open
     justSent: new Set(),             // rows whose DM 1 was just marked sent (keep the text + Copy visible)
     tab: (location.hash || '').replace('#', '') || 'today',
+    dueTab: null,                    // Today sub-tab: 'warmup' | 'followups' | 'price' (null = first non-empty)
     query: '',                       // search box text
     preview: new Set(),              // warming rows with the DM 1 preview open (status unchanged)
     modal: null,                     // { type: 'add'|'reply'|'notes'|'loom'|'test', ... }
@@ -358,25 +359,41 @@
     `<div class="msg">${esc(it.text)}</div>`,
     `${copyBtn(it.text)}${btn('Mark Sent', 'markPriceFollowUp', { row: it.lead._row }, 'btn-ok', 'send')}`);
 
-  const group = (title, count, items, empty) => `
-    <div>
-      <div class="sub-title">${title} <span class="count">${count}</span></div>
-      <div class="space-y-2.5">${items.join('') || `<div class="empty">${icon('check')}${empty}</div>`}</div>
-    </div>`;
-
-  const WARM_LIMIT = 5; // Today shows the first few; the Warming tab has the full list
+  // Due today is split into three sub-tabs so 50 warm-up cards don't bury the follow-ups.
+  const DUE_TABS = [
+    { key: 'warmup', label: 'Warm-up', icon: 'flame' },
+    { key: 'followups', label: 'Follow-ups', icon: 'send' },
+    { key: 'price', label: 'Price sent', icon: 'msg' },
+  ];
 
   function renderDue() {
     const due = dueCache;
-    const total = due.warmup.length + due.followups.length + due.price.length;
+    const items = {
+      warmup: due.warmup.map(warmEntry),
+      followups: due.followups.map(followupEntry),
+      price: due.price.map(priceEntry),
+    };
+    const empty = {
+      warmup: 'All warm-up leads touched today',
+      followups: 'No follow-ups due',
+      price: 'Nobody to nudge — no price-sent lead has been quiet 3+ days',
+    };
+    const hint = {
+      warmup: 'Leave a real comment on a recent post, then tap +1 Touch. Real comments only — not an emoji.',
+      followups: 'DM 1 went out and there was no reply. Copy the message, send it on Instagram, then tap Mark Sent.',
+      price: 'You sent a price and they went quiet for 3+ days. Copy the message, send it, then tap Mark Sent.',
+    };
+    const total = items.warmup.length + items.followups.length + items.price.length;
+    // Default to the first group that has something to do.
+    const active = DUE_TABS.some((d) => d.key === state.dueTab) ? state.dueTab : (DUE_TABS.find((d) => items[d.key].length) || DUE_TABS[0]).key;
     return `
       <section>
         <h2 class="sec-title">${icon('bell')}Due today <span class="count ${total ? 'count-alert' : 'count-ok'}">${total}</span></h2>
-        <div class="grid gap-5 lg:grid-cols-3 items-start">
-          ${group('Warm-up touches', due.warmup.length, due.warmup.slice(0, WARM_LIMIT).map(warmEntry).concat(due.warmup.length > WARM_LIMIT ? [`<button type="button" class="btn btn-block" data-action="setTab" data-tab="warming">See all ${due.warmup.length} in the Warming tab →</button>`] : []), 'All warm-up leads touched today')}
-          ${group('Follow-ups', due.followups.length, due.followups.map(followupEntry), 'No follow-ups due')}
-          ${group('Price sent · quiet 3+ days', due.price.length, due.price.map(priceEntry), 'Nobody to nudge')}
+        <div class="subtabs" role="tablist" aria-label="Due today groups">
+          ${DUE_TABS.map((d) => `<button type="button" role="tab" class="subtab ${active === d.key ? 'on' : ''}" aria-selected="${active === d.key}" data-action="setDueTab" data-dtab="${d.key}">${icon(d.icon)}<span>${d.label}</span><span class="count ${d.key !== 'warmup' && items[d.key].length ? 'count-alert' : ''}">${items[d.key].length}</span></button>`).join('')}
         </div>
+        <div class="muted text-sm mb-3" style="line-height:1.5">${hint[active]}</div>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 items-start">${items[active].join('') || `<div class="empty sm:col-span-2 lg:col-span-3">${icon('check')}${empty[active]}</div>`}</div>
       </section>`;
   }
 
@@ -862,6 +879,7 @@
     copyFollowUp: (d) => copyFollowUp(d.row),
     toggleRow: (d) => { const r = Number(d.row); state.expanded.has(r) ? state.expanded.delete(r) : state.expanded.add(r); render(); },
     setTab: (d) => setTab(d.tab),
+    setDueTab: (d) => { state.dueTab = d.dtab; render(); },
     togglePreview: (d) => { const r = Number(d.row); state.preview.has(r) ? state.preview.delete(r) : state.preview.add(r); render(); },
     filterStatus: (d) => {
       // Warming / DM Sent have their own tabs; the other statuses open All leads pre-filtered.
