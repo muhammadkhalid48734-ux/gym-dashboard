@@ -31,7 +31,7 @@ const parse = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c); const p = m[1].spli
 const lum = ({ r, g, b }) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
 const ratio = (a, b) => { const x = lum(a); const y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
 
-const CONTRAST_SELECTORS = ['body', '.muted', '.subtle', '.help', '.lbl', '.band-label', '.band-sub', '.stat-label', '.stat-sub', '.count', '.count-alert', '.chip.t-zinc', '.chip.t-emerald', '.chip.t-amber', '.chip.t-red',
+const CONTRAST_SELECTORS = ['body', '.muted', '.subtle', '.help', '.lbl', '.band-label', '.band-sub', '.stat-label', '.stat-sub', '.count', '.count-alert', '.chip.t-zinc', '.chip.t-emerald', '.chip.t-amber', '.chip.t-red', '.chip.t-violet', '.chip.t-sky', '.stat-label', '.stat-sub', '.band-num',
   '.chip-solid', '.btn', '.btn-primary', '.btn-ink', '.btn-danger', '.acct-flag.a1', '.acct-flag.a2', '.tab', '.tab.on', '.subtab', '.subtab.on', '.pill-link', '.note', '.entry-meta', '.msg', '.last-contact', '.avatar', '.pipe-pill', '.toast', '.empty', '.msg-label', '.sub-title'];
 
 async function contrastAudit(page, label) {
@@ -81,22 +81,20 @@ async function contrastAudit(page, label) {
           clone.querySelectorAll('.msg, [data-user-copy]').forEach((n) => n.remove());
           const dashes = /[—–]/.test(clone.innerText || clone.textContent);
           const dots = document.querySelectorAll('.dot').length;
-          const grad = [...document.querySelectorAll('.btn, .card, .band, .stats, .tab, .topbar, .chip, .acct-flag, .list, .row')].filter((el) => /gradient/.test(getComputedStyle(el).backgroundImage)).length;
           const px = (el, prop = 'borderTopLeftRadius') => el && parseFloat(getComputedStyle(el)[prop]);
           const radii = { btn: px(document.querySelector('.btn')), field: px(document.querySelector('.field')), card: px(document.querySelector('.card')), chip: px(document.querySelector('.chip')), avatar: px(document.querySelector('.avatar')), list: px(document.querySelector('.list')) };
           const wraps = [...document.querySelectorAll('.btn')].filter((b) => b.offsetParent && (b.getBoundingClientRect().height > 48.5 || b.scrollWidth > b.clientWidth + 1)).map((b) => b.textContent.trim().slice(0, 30));
           const emptyIcons = [...document.querySelectorAll('svg.ic')].filter((s) => !s.children.length).length;
-          const pure = ['body', '.card', '.list', '.topbar'].map((q) => { const e = document.querySelector(q); return e && getComputedStyle(e).backgroundColor; }).filter((c) => c === 'rgb(255, 255, 255)' || c === 'rgb(0, 0, 0)');
-          return { dashes, dots, grad, radii, wraps, emptyIcons, pure, sw: document.documentElement.scrollWidth, vw: window.innerWidth };
+          const pure = ['body', '.card', '.list'].map((q) => { const e = document.querySelector(q); return e && getComputedStyle(e).backgroundColor; }).filter((c) => c === 'rgb(0, 0, 0)');
+          return { dashes, dots, radii, wraps, emptyIcons, pure, sw: document.documentElement.scrollWidth, vw: window.innerWidth };
         });
         assert.equal(r.dashes, false, `em/en dash visible on ${tab}`);
         assert.equal(r.dots, 0, `decorative dots on ${tab}`);
-        assert.equal(r.grad, 0, `gradient on a control/surface on ${tab}`);
         assert.deepEqual(r.wraps, [], `button label wraps or clips on ${tab} (${name})`);
         assert.equal(r.emptyIcons, 0, `missing icon on ${tab}`);
-        assert.deepEqual(r.pure, [], `pure white/black surface on ${tab}`);
+        assert.deepEqual(r.pure, [], `pure black surface on ${tab}`);
         assert.ok(r.sw <= r.vw + 1, `horizontal scroll on ${tab} (${name})`);
-        Object.entries({ btn: 8, field: 8, card: 12, chip: 6, avatar: 8, list: 12 }).forEach(([k, v]) => { if (r.radii[k] !== null && r.radii[k] !== undefined && !Number.isNaN(r.radii[k])) assert.equal(r.radii[k], v, `radius of .${k} on ${tab}`); });
+        Object.entries({ btn: 10, field: 10, card: 16, chip: 999, avatar: 14, list: 16 }).forEach(([k, v]) => { if (r.radii[k] !== null && r.radii[k] !== undefined && !Number.isNaN(r.radii[k])) assert.equal(r.radii[k], v, `radius of .${k} on ${tab}`); });
         checked += await contrastAudit(page, `${tab} / ${scheme} / ${name}`);
       }
       // modals
@@ -110,7 +108,7 @@ async function contrastAudit(page, label) {
         const bg = getComputedStyle(document.querySelector('.field')).backgroundColor;
         return { dashes: /[—–]/.test(clone.innerText), ph, bg, sheetRadius: parseFloat(getComputedStyle(document.querySelector('.sheet')).borderTopLeftRadius) };
       });
-      assert.equal(m.dashes, false); assert.equal(m.sheetRadius, 12);
+      assert.equal(m.dashes, false); assert.equal(m.sheetRadius, 20);
       assert.ok(ratio(parse(m.ph), parse(m.bg)) >= 4.5, `placeholder contrast ${ratio(parse(m.ph), parse(m.bg)).toFixed(2)} (${scheme})`);
       checked += await contrastAudit(page, `add form / ${scheme} / ${name}`);
       await page.keyboard.press('Escape');

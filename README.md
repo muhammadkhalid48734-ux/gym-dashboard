@@ -65,7 +65,7 @@ The search box (right of the tabs) filters by gym, city, owner or notes. The DM 
 - **Add another:** the toast after adding a lead has an "Add another" button.
 
 ## Design notes
-Internal work tool, so the look is calm and dense: neutral zinc surfaces, **one** accent (emerald), blue and orange used only to tell Account 1 from Account 2, one radius scale (6px tags, 8px controls, 12px containers), no gradients, no glow, no decorative dots. Light and dark follow the phone or computer setting; both are tested. Text is Geist and Geist Mono, self-hosted in `public/fonts` (no Google Fonts request). Icons are Phosphor (regular weight), generated into `public/icons.js`.
+Friendly but still a work tool: a dark emerald gradient hero keeps today's DM progress (ring + one bar per account) and the deadline on screen at all times; pill tabs, soft white cards on a tinted canvas, colour-coded stat tiles, chat-bubble message previews and a gradient primary button. **Account 1 is always blue and Account 2 always orange** (flag, card stripe, progress bars). One shape scale (10px controls, 14px avatars and tiles, 16px cards, 20px hero and sheets, pills for tags and tabs), two soft shadows. Light and dark follow the phone or computer setting; both are tested for 4.5:1 text contrast. Text is Geist and Geist Mono, self-hosted in `public/fonts` (no Google Fonts request). Icons are Phosphor (regular weight), generated into `public/icons.js`.
 
 Change an icon or update the fonts:
 ```bash

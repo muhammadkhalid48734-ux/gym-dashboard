@@ -29,7 +29,7 @@ const { start } = require('./devServer.js');
 
   // ---- header + tabs
   let t = await txt();
-  assert.match(t, /DMs sent today\s+0 \/ 20/); assert.match(t, /days left until Nov 3, 2026/); step('header: DM counter + deadline');
+  assert.match(t, /0 \/ 20[\s\S]*DMs sent today/); assert.match(t, /days left until Nov 3, 2026/); step('header: DM counter + deadline');
   const tabNames = await page.locator('.tab').allInnerTexts();
   assert.deepEqual(tabNames.map((x) => x.replace(/\s+\d+$/, '').trim()), ['Today', 'DM Queue', 'Warming', 'Follow-ups', 'Replies', 'All leads', 'Scripts']); step('tab menu: Today / DM Queue / Warming / Follow-ups / Replies / All leads / Scripts');
   assert.match(await page.innerText('[data-tab=queue]'), /1/); assert.match(await page.innerText('[data-tab=warming]'), /2/); assert.match(await page.innerText('[data-tab=followups]'), /2/); assert.match(await page.innerText('[data-tab=replies]'), /1/); assert.match(await page.innerText('[data-tab=all]'), /5/); step('tab counts');
